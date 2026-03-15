@@ -1,41 +1,67 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<artifactId>LB</artifactId>
+	<groupId>org.qualsh</groupId>
+	<artifactId>logbook</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>Logbook</name>
-	<build>
-		<sourceDirectory>src</sourceDirectory>
-	</build>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<maven.compiler.release>22</maven.compiler.release>
 		<jsonsimple.version>1.1</jsonsimple.version>
-		<geotools.version>12.1</geotools.version>
+		<geotools.version>31.1</geotools.version>
+		<flatlaf.version>3.5.1</flatlaf.version>
+		<junit.jupiter.version>5.10.2</junit.jupiter.version>
 	</properties>
+
+	<build>
+		<sourceDirectory>src</sourceDirectory>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.13.0</version>
+				<configuration>
+					<release>22</release>
+					<encoding>UTF-8</encoding>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>3.2.5</version>
+			</plugin>
+		</plugins>
+	</build>
+
 	<repositories>
 		<repository>
-			<id>osgeo</id>
-			<name>Open Source Geospatial Foundation Repository</name>
-			<url>http://download.osgeo.org/webdav/geotools</url>
+			<id>osgeo-releases</id>
+			<name>OSGeo Releases Repository</name>
+			<url>https://repo.osgeo.org/repository/release/</url>
+			<snapshots>
+				<enabled>false</enabled>
+			</snapshots>
 		</repository>
 	</repositories>
+
 	<dependencies>
+		<!-- Modern look and feel -->
+		<dependency>
+			<groupId>com.formdev</groupId>
+			<artifactId>flatlaf</artifactId>
+			<version>${flatlaf.version}</version>
+		</dependency>
+
+		<!-- JSON -->
 		<dependency>
 			<groupId>com.googlecode.json-simple</groupId>
 			<artifactId>json-simple</artifactId>
 			<version>${jsonsimple.version}</version>
 		</dependency>
-		<!-- <dependency>
-			<groupId>gov.nasa</groupId>
-			<artifactId>worldwind</artifactId>
-			<version>2.0.0-986</version>
-		</dependency> -->
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>3.8.1</version>
-			<scope>test</scope>
-		</dependency>
+
+		<!-- Swing extensions -->
 		<dependency>
 			<groupId>org.swinglabs</groupId>
 			<artifactId>swingx</artifactId>
@@ -46,31 +72,18 @@
 			<artifactId>swingx-ws</artifactId>
 			<version>1.0</version>
 		</dependency>
+
+		<!-- Filtered list models -->
 		<dependency>
 			<groupId>net.java.dev.glazedlists</groupId>
 			<artifactId>glazedlists_java15</artifactId>
 			<version>1.9.0</version>
 		</dependency>
-		<!-- <dependency>
-			<groupId>org.jogamp.gluegen</groupId>
-			<artifactId>gluegen-rt-main</artifactId>
-			<version>2.1.5-01</version>
-		</dependency>
-		<dependency>
-			<groupId>org.jogamp.jogl</groupId>
-			<artifactId>jogl-all-main</artifactId>
-			<version>2.1.5-01</version>
-		</dependency>
-		<dependency>
-			<groupId>gov.nasa</groupId>
-			<artifactId>worldwindx</artifactId>
-			<version>2.0.0-986</version>
-		</dependency> -->
-		<dependency>
-			<groupId>com.ning</groupId>
-			<artifactId>async-http-client</artifactId>
-			<version>1.8.14</version>
-		</dependency>
+
+		<!-- HTTP replaced by java.net.http (JDK built-in since Java 11) -->
+		<!-- Removed: com.ning:async-http-client -->
+
+		<!-- GeoTools -->
 		<dependency>
 			<groupId>org.geotools</groupId>
 			<artifactId>gt-shapefile</artifactId>
@@ -101,6 +114,13 @@
 			<artifactId>gt-wms</artifactId>
 			<version>${geotools.version}</version>
 		</dependency>
+
+		<!-- Testing -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
-	<groupId>LB</groupId>
 </project>
