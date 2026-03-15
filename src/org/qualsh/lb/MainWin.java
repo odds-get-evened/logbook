@@ -152,18 +152,18 @@ public class MainWin extends JFrame {
 
 	private void setupIcons() {
 		List<Image> images = new ArrayList<Image>();
-		
-		Image img16 = Toolkit.getDefaultToolkit().getImage(App.class.getResource("/imgs/lb_16x16.png"));
-		Image img32 = Toolkit.getDefaultToolkit().getImage(App.class.getResource("/imgs/lb_32x32.png"));
-		Image img48 = Toolkit.getDefaultToolkit().getImage(App.class.getResource("/imgs/lb_48x48.png"));
-		Image img128 = Toolkit.getDefaultToolkit().getImage(App.class.getResource("/imgs/lb_128x128.png"));
-		
-		images.add(img16);
-		images.add(img32);
-		images.add(img48);
-		images.add(img128);
-		
-		setIconImages(images);
+
+		String[] sizes = {"/imgs/lb_16x16.png", "/imgs/lb_32x32.png", "/imgs/lb_48x48.png", "/imgs/lb_128x128.png"};
+		for (String path : sizes) {
+			java.net.URL url = App.class.getResource(path);
+			if (url != null) {
+				images.add(Toolkit.getDefaultToolkit().getImage(url));
+			}
+		}
+
+		if (!images.isEmpty()) {
+			setIconImages(images);
+		}
 	}
 
 	private void addMenu() {
