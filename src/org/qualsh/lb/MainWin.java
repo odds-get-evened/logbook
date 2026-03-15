@@ -20,17 +20,14 @@ import java.util.List;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
 import org.qualsh.lb.data.Data;
-import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.util.Debugger;
 import org.qualsh.lb.view.LogInteraction;
 import org.qualsh.lb.view.LogMenuBar;
 import org.qualsh.lb.view.LogsPanel;
-import org.qualsh.lb.view.MapImagePanel;
 import org.qualsh.lb.view.NewStationDialog;
 
 public class MainWin extends JFrame {
@@ -41,7 +38,6 @@ public class MainWin extends JFrame {
 	private LogInteraction logInteraction;
 	private LogsPanel logsPanel;
 	private LogMenuBar logMenuBar;
-	protected MapImagePanel mapPanel;
 
 	public MainWin() throws HeadlessException {
 		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -117,18 +113,6 @@ public class MainWin extends JFrame {
 		
 		logsPanel = new LogsPanel();
 		leftPanel.add(logsPanel, BorderLayout.CENTER);
-
-		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
-				mapPanel = new MapImagePanel();
-				leftPanel.add(mapPanel, BorderLayout.SOUTH);
-				
-				LogsModel logTableModel = (LogsModel) MainWin.this.getLogsPanel().getLogsTable().getModel();
-				mapPanel.updateMarkers(logTableModel.getData());
-				
-				logsPanel.setMapPanel(mapPanel);
-			}
-		});
 		
 		this.setLogInteraction(new LogInteraction());
 		this.getLogInteraction().setLogTable(logsPanel.getLogsTable());

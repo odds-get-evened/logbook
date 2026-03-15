@@ -28,7 +28,7 @@ import javax.swing.border.EtchedBorder;
 import javax.swing.border.TitledBorder;
 
 import org.json.simple.parser.ParseException;
-import org.qualsh.lb.geo.geocode.Geocode;
+import org.qualsh.lb.util.Geocode;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Preferences;
 import org.qualsh.lb.util.Utilities;

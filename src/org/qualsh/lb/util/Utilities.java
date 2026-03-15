@@ -16,7 +16,7 @@ import java.util.GregorianCalendar;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.qualsh.lb.geo.geocode.Geocode;
+import org.qualsh.lb.util.Geocode;
 
 public class Utilities {
 

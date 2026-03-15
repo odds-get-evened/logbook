@@ -25,12 +25,10 @@ public class LogsPanel extends JPanel {
 	private LogsTable logsTable;
 
 	/**
-	 * 
+	 *
 	 */
 	private static final long serialVersionUID = 4888587192397257257L;
 	private JTextField textSearchLogs;
-	
-	private MapImagePanel mapPanel;
 
 	private JButton btnReset;
 			
@@ -43,7 +41,7 @@ public class LogsPanel extends JPanel {
 		scrollPane.setBorder(new EmptyBorder(1, 1, 1, 1));
 		add(scrollPane, BorderLayout.CENTER);
 		
-		final LogsModel lm = new LogsModel(this.getMapPanel());
+		final LogsModel lm = new LogsModel();
 		logsTable = new LogsTable(lm);
 		logsTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		scrollPane.setViewportView(logsTable);
@@ -74,14 +72,11 @@ public class LogsPanel extends JPanel {
 				LogsModel lm = (LogsModel) getLogsTable().getModel();
 				lm.getData().clear();
 				lm.setData(lm.getLogList());
-				
-				// update map
-				LogsPanel.this.mapPanel.updateMarkers(lm.getLogList());
-				
+
 				getLogsTable().updateUI();
 				textSearchLogs.setText("");
 			}
-			
+
 		});
 		
 		textSearchLogs = new JTextField();
@@ -112,10 +107,7 @@ public class LogsPanel extends JPanel {
 				LogsModel lm = (LogsModel) LogsPanel.this.getLogsTable().getModel();
 				lm.getData().clear();
 				lm.getThisHour();
-				
-				// update map
-				LogsPanel.this.mapPanel.updateMarkers(lm.getData());
-				
+
 				LogsPanel.this.getLogsTable().updateUI();
 			}
 		});
@@ -158,12 +150,5 @@ public class LogsPanel extends JPanel {
 		this.logsTable = logsTable;
 	}
 
-	public MapImagePanel getMapPanel() {
-		return mapPanel;
-	}
-
-	public void setMapPanel(MapImagePanel mapPanel) {
-		this.mapPanel = mapPanel;
-	}
-	
 }
+

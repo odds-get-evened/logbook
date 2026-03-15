@@ -1,15 +1,15 @@
-package org.qualsh.lb.geo.geocode;
+package org.qualsh.lb.util;
 
 public class Geocode {
 	private String latitude;
 	private String longitude;
 	private String city;
 	private String state;
-	
+
 	public Geocode() {
-		
+
 	}
-	
+
 	public Geocode(String lat, String lon, String city, String state) {
 		this.setCity(city);
 		this.setLatitude(lat);

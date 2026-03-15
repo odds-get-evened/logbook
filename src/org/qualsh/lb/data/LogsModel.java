@@ -16,7 +16,6 @@ import javax.swing.table.AbstractTableModel;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Utilities;
-import org.qualsh.lb.view.MapImagePanel;
 
 public class LogsModel extends AbstractTableModel implements TableModelListener {
 
@@ -27,7 +26,6 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	
 	private String[] columns;
 	private ArrayList<Log> data;
-	private MapImagePanel mapPanel;
 	
 	public static final int COLUMN_NUM_DATEON = 0;
 	public static final int COLUMN_NUM_FREQUENCY = 2;
@@ -44,12 +42,6 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		addTableModelListener(this);
 	}
 	
-	public LogsModel(MapImagePanel mapPanel2) {
-		this();
-		
-		this.setMapPanel(mapPanel2);
-	}
-
 	public ArrayList<Log> getLogList() {
 		ArrayList<Log> logList = new ArrayList<Log>();
 		
@@ -396,12 +388,6 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 
 	public void tableChanged(TableModelEvent e) {
 		System.out.println("Table data has been changed");
-		
-		/**
-		 * @todo Add map updating here
-		 */
-		System.out.println(this.getMapPanel().toString());
-		
 		setData(getLogList());
 	}
 	
@@ -504,11 +490,4 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		}
 	}
 
-	public MapImagePanel getMapPanel() {
-		return mapPanel;
-	}
-
-	public void setMapPanel(MapImagePanel mapPanel) {
-		this.mapPanel = mapPanel;
-	}
 }
