@@ -13,6 +13,7 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.AbstractTableModel;
 
+import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Utilities;
@@ -26,16 +27,17 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	
 	private String[] columns;
 	private ArrayList<Log> data;
-	
+
 	public static final int COLUMN_NUM_DATEON = 0;
 	public static final int COLUMN_NUM_FREQUENCY = 2;
 	public static final int COLUMN_NUM_MODE = 3;
 	public static final int COLUMN_NUM_DESC = 5;
 	public static final int COLUMN_NUM_MYPLACE = 4;
 	public static final int COLUMN_NUM_TIMEON = 1;
+	public static final int COLUMN_NUM_LOCATION = 6;
 
 	public LogsModel() {
-		columns = new String[]{"Date", "Time (UTC)", "Frequency (kHz)", "Mode", "RX Loc.", "Description"};
+		columns = new String[]{"Date", "Time (UTC)", "Frequency (kHz)", "Mode", "RX Loc.", "Description", "TX Location"};
 		
 		setData(getLogList());
 		
@@ -257,6 +259,13 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				Place place = log.getFullMyPlace();
 				if(place != null) {
 					return place.getPlaceName();
+				} else {
+					return "";
+				}
+			case COLUMN_NUM_LOCATION:
+				Location loc = log.getFullLocation();
+				if(loc != null) {
+					return loc.getLocationName();
 				} else {
 					return "";
 				}
