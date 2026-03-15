@@ -126,6 +126,13 @@
 			<version>1.7.36</version>
 		</dependency>
 
+		<!-- Interactive map viewer (OpenStreetMap tiles) -->
+		<dependency>
+			<groupId>org.jxmapviewer</groupId>
+			<artifactId>jxmapviewer2</artifactId>
+			<version>2.6</version>
+		</dependency>
+
 		<!-- Testing -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

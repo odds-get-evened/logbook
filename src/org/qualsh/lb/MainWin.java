@@ -20,14 +20,17 @@ import java.util.List;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSplitPane;
 import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 
 import org.qualsh.lb.data.Data;
+import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.util.Debugger;
 import org.qualsh.lb.view.LogInteraction;
 import org.qualsh.lb.view.LogMenuBar;
 import org.qualsh.lb.view.LogsPanel;
+import org.qualsh.lb.view.MapPanel;
 import org.qualsh.lb.view.NewStationDialog;
 
 public class MainWin extends JFrame {
@@ -38,25 +41,24 @@ public class MainWin extends JFrame {
 	private LogInteraction logInteraction;
 	private LogsPanel logsPanel;
 	private LogMenuBar logMenuBar;
+	private MapPanel mapPanel;
 
 	public MainWin() throws HeadlessException {
 		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-		this.setResizable(false);
-		
+		this.setResizable(true);
+
 		/**
 		 * For debug output outside of IDE
 		 * @todo Turn off for production release
 		 */
 		setDebugger(new Debugger());
 		getDebugger().setVisible(true);
-		
+
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-		//int winW = (int) (screenSize.getWidth() * 0.75);
 		int winW = 1200;
 		int winH = (int) (screenSize.getHeight() * 0.8);
 		this.setSize(winW, winH);
-		this.setMinimumSize(new Dimension(winW, this.getSize().height));
-		this.setMaximumSize(new Dimension(winW, this.getSize().height));
+		this.setMinimumSize(new Dimension(800, 600));
 		
 		int winX = (int) ((screenSize.getWidth() - this.getSize().getWidth()) / 2);
 		int winY = (int) ((screenSize.getHeight() - this.getSize().getHeight()) / 2);
@@ -112,20 +114,32 @@ public class MainWin extends JFrame {
 		this.getContentPane().add(rightPanel, BorderLayout.EAST);
 		
 		logsPanel = new LogsPanel();
-		leftPanel.add(logsPanel, BorderLayout.CENTER);
-		
+		mapPanel = new MapPanel();
+
+		// Split left panel: logs table on top, map below
+		JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logsPanel, mapPanel);
+		leftSplit.setResizeWeight(0.5);   // give equal initial space to each half
+		leftSplit.setBorder(null);
+		leftPanel.add(leftSplit, BorderLayout.CENTER);
+
 		this.setLogInteraction(new LogInteraction());
 		this.getLogInteraction().setLogTable(logsPanel.getLogsTable());
 		this.getLogInteraction().setMainWin(this);
 		this.getLogInteraction().setPreferencesDialog(this.getLogMenuBar().getPrefDialog());
 		this.getLogInteraction().getPreferencesDialog().setLogInteraction(this.getLogInteraction());
-		
+
 		logsPanel.getLogsTable().setLogInteraction(this.getLogInteraction());
+		logsPanel.getLogsTable().setMapPanel(mapPanel);
 		
 		rightPanel.add(this.getLogInteraction(), BorderLayout.CENTER);
 		
 		this.getLogMenuBar().setLogInteraction(this.getLogInteraction());
-		
+
+		// Plot all existing logs on the map and keep it refreshed on changes
+		LogsModel logsModel = (LogsModel) logsPanel.getLogsTable().getModel();
+		mapPanel.plotLogs(logsModel.getData());
+		logsModel.addTableModelListener(e -> mapPanel.plotLogs(logsModel.getData()));
+
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
 
 			public boolean dispatchKeyEvent(KeyEvent e) {
@@ -220,6 +234,14 @@ public class MainWin extends JFrame {
 		this.logMenuBar = logMenuBar;
 	}
 	
+	public MapPanel getMapPanel() {
+		return mapPanel;
+	}
+
+	public void setMapPanel(MapPanel mapPanel) {
+		this.mapPanel = mapPanel;
+	}
+
 	public void exit(JFrame jframe) {
 		int confirmed = JOptionPane.showConfirmDialog(jframe, "Are you sure you want to quit?", "Confirm quit", JOptionPane.YES_NO_OPTION);
 		
