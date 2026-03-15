@@ -70,7 +70,7 @@ public class Log {
 					+ "dateon = ?, "
 					+ "description = ?, "
 					+ "location = ?, "
-					+ "my_place = ?"
+					+ "my_place = ? "
 					+ "WHERE id = ?");
 			ps.setFloat(1, getFrequency());
 			ps.setString(2, getMode());
