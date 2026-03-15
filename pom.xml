@@ -8,7 +8,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<maven.compiler.release>22</maven.compiler.release>
+		<maven.compiler.release>21</maven.compiler.release>
 		<jsonsimple.version>1.1</jsonsimple.version>
 		<flatlaf.version>3.5.1</flatlaf.version>
 		<junit.jupiter.version>5.10.2</junit.jupiter.version>
@@ -24,7 +24,7 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.13.0</version>
 				<configuration>
-					<release>22</release>
+					<release>21</release>
 					<encoding>UTF-8</encoding>
 				</configuration>
 			</plugin>
@@ -109,6 +109,13 @@
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>
 			<version>${sqlite.version}</version>
+		</dependency>
+
+		<!-- SLF4J simple logger implementation -->
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
+			<version>1.7.36</version>
 		</dependency>
 
 		<!-- Testing -->
