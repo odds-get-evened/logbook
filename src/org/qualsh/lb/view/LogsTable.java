@@ -32,9 +32,11 @@ public class LogsTable extends JTable {
 	private static final long serialVersionUID = -3632751004830947138L;
 	
 	private LogInteraction logInteraction;
-	
+
+	private MapPanel mapPanel;
+
 	private JPopupMenu popup;
-	
+
 	private Log selectedLog;
 		
 	public LogsTable() {}
@@ -69,21 +71,24 @@ public class LogsTable extends JTable {
 					LogsTable.this.getLogInteraction().getBtnDeleteLog().setEnabled(false);
 					LogsTable.this.getLogInteraction().getBtnEditLog().setEnabled(false);
 					LogsTable.this.emptyFields();
+					if (LogsTable.this.getMapPanel() != null) {
+						LogsTable.this.getMapPanel().clearSelection();
+					}
 				} else {
 					int selectedRow = lsm.getMinSelectionIndex();
 					LogsTable.this.getLogInteraction().getBtnDeleteLog().setEnabled(true);
 					LogsTable.this.getLogInteraction().getBtnEditLog().setEnabled(true);
-					
+
 					LogsModel lm = (LogsModel) LogsTable.this.getModel();
 					Log log = lm.getData().get(LogsTable.this.convertRowIndexToModel(selectedRow));
-					
+
 					LogsTable.this.fillFields(log);
 					LogsTable.this.getLogInteraction().resetEntry();
 					LogsTable.this.getLogInteraction().getTabbedPane().setSelectedIndex(0);
-					
-					/**
-					 * @todo Update map markers on selection to highlight selected marker
-					 */
+
+					if (LogsTable.this.getMapPanel() != null) {
+						LogsTable.this.getMapPanel().highlightLog(log);
+					}
 				}
 			}
 			
@@ -193,6 +198,14 @@ public class LogsTable extends JTable {
 
 	public void setLogInteraction(LogInteraction logInteraction) {
 		this.logInteraction = logInteraction;
+	}
+
+	public MapPanel getMapPanel() {
+		return mapPanel;
+	}
+
+	public void setMapPanel(MapPanel mapPanel) {
+		this.mapPanel = mapPanel;
 	}
 
 	public JPopupMenu getPopup() {
