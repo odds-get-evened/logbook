@@ -91,6 +91,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	}
 	
 	public void searchAll(String query) {
+		ArrayList<Log> results = new ArrayList<Log>();
 		Connection conn = Data.getConnection();
 		PreparedStatement ps = null;
 		ResultSet rs = null;
@@ -98,7 +99,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place FROM logs WHERE freq LIKE ? OR description LIKE ? ORDER BY dateon DESC");
 			ps.setString(1, "%" + query.trim()  + "%");
 			ps.setString(2, "%" + query.trim() + "%");
-			
+
 			rs = ps.executeQuery();
 			while(rs.next()) {
 				Log log = new Log();
@@ -109,8 +110,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
-				
-				data.add(log);
+
+				results.add(log);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -120,19 +121,21 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 		}
+		setData(results);
+		fireTableDataChanged();
 	}
 	
 	public ArrayList<Log> getLogList(String order, String sort) {
@@ -240,6 +243,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	}
 
 	public Object getValueAt(int rowIndex, int columnIndex) {
+		if (rowIndex < 0 || rowIndex >= data.size()) return null;
 		Log log = data.get(rowIndex);
 		
 		switch(columnIndex) {
@@ -347,9 +351,9 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			}
 			
 			st.execute();
-			
+			setData(getLogList());
 			fireTableDataChanged();
-			
+
 		} catch (SQLException e) {
 			e.printStackTrace();
 		} finally {
@@ -358,7 +362,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				db.close();
 			} catch (SQLException e) {
@@ -366,7 +370,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			}
 		}
 	}
-	
+
 	public void delete(Log log) {
 		Connection db = Data.getConnection();
 		PreparedStatement ps = null;
@@ -375,7 +379,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			ps.setInt(1, log.getId());
 			
 			ps.execute();
-			
+			setData(getLogList());
 			fireTableDataChanged();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -386,7 +390,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				db.close();
 			} catch (SQLException e) {
@@ -396,8 +400,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	}
 
 	public void tableChanged(TableModelEvent e) {
-		System.out.println("Table data has been changed");
-		setData(getLogList());
+		// no-op: data is refreshed before fireTableDataChanged() in each mutating operation
 	}
 	
 	public ArrayList<Log> getData() {
@@ -428,9 +431,9 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			}
 			
 			ps.execute();
-			
+			setData(getLogList());
 			fireTableDataChanged();
-			
+
 			ps.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -440,7 +443,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
@@ -452,7 +455,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 	public void getThisHour() {
 		Calendar now = Calendar.getInstance();
 		int hour = now.get(Calendar.HOUR_OF_DAY);
-		
+		ArrayList<Log> results = new ArrayList<Log>();
+
 		Connection db = Data.getConnection();
 		PreparedStatement ps = null;
 		ResultSet rs = null;
@@ -461,9 +465,9 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 					+ "FROM logs "
 					+ "WHERE CAST(STRFTIME('%H', datetime(dateon, 'unixepoch')) AS INTEGER) = ?");
 			ps.setInt(1, hour);
-			
+
 			rs = ps.executeQuery();
-			
+
 			while(rs.next()) {
 				Log log = new Log();
 				log.setId(rs.getInt("id"));
@@ -473,8 +477,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
-				
-				this.data.add(log);
+
+				results.add(log);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -484,19 +488,21 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				db.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 		}
+		setData(results);
+		fireTableDataChanged();
 	}
 
 }

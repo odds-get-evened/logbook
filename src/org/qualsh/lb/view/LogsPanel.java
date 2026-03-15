@@ -70,8 +70,8 @@ public class LogsPanel extends JPanel {
 
 			public void actionPerformed(ActionEvent e) {
 				LogsModel lm = (LogsModel) getLogsTable().getModel();
-				lm.getData().clear();
 				lm.setData(lm.getLogList());
+				lm.fireTableDataChanged();
 
 				getLogsTable().updateUI();
 				textSearchLogs.setText("");
@@ -105,7 +105,6 @@ public class LogsPanel extends JPanel {
 		btnThisHour.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				LogsModel lm = (LogsModel) LogsPanel.this.getLogsTable().getModel();
-				lm.getData().clear();
 				lm.getThisHour();
 
 				LogsPanel.this.getLogsTable().updateUI();
@@ -125,7 +124,6 @@ public class LogsPanel extends JPanel {
 
 	private void searchLogs(String text) {
 		LogsModel lm = (LogsModel) getLogsTable().getModel();
-		lm.getData().clear();
 		lm.searchAll(text);
 		getLogsTable().updateUI();
 	}

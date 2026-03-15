@@ -143,9 +143,11 @@ public class PreferencesDialog extends JDialog {
 				if(!PreferencesDialog.this.getTextFindLocation().getText().isEmpty()) {
 					try {
 						Geocode gc = (Geocode) Utilities.geocode(PreferencesDialog.this.getTextFindLocation().getText().trim());
-						PreferencesDialog.this.getTextLatitude().setText(gc.getLatitude());
-						PreferencesDialog.this.getTextLongitude().setText(gc.getLongitude());
-						PreferencesDialog.this.getLblCurrentLocation().setText(gc.getCity()+", "+gc.getState());
+						if (gc != null) {
+							PreferencesDialog.this.getTextLatitude().setText(gc.getLatitude());
+							PreferencesDialog.this.getTextLongitude().setText(gc.getLongitude());
+							PreferencesDialog.this.getLblCurrentLocation().setText(gc.getCity()+", "+gc.getState());
+						}
 					} catch (MalformedURLException e1) {
 						e1.printStackTrace();
 					} catch (IOException e1) {

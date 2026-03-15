@@ -76,7 +76,12 @@ public class MapPanel extends JPanel {
         setLayout(new BorderLayout());
 
         // ---- tile factory (OpenStreetMap) ----
-        DefaultTileFactory tileFactory = new DefaultTileFactory(new OSMTileFactoryInfo());
+        DefaultTileFactory tileFactory = new DefaultTileFactory(new OSMTileFactoryInfo() {
+            @Override
+            public String getTileUrl(int x, int y, int zoom) {
+                return super.getTileUrl(x, y, zoom).replace("http://", "https://");
+            }
+        });
         tileFactory.setThreadPoolSize(4);
 
         mapViewer = new JXMapViewer();

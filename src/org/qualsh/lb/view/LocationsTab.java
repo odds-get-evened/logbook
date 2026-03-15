@@ -94,8 +94,8 @@ public class LocationsTab extends JPanel {
 					btnDeleteLocation.setEnabled(false);
 					// reset logs table
 					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.getData().clear();
 					logModel.setData(logModel.getLogList());
+					logModel.fireTableDataChanged();
 					getLogsTable().updateUI();
 				}
 				
@@ -161,8 +161,8 @@ public class LocationsTab extends JPanel {
 					btnDeleteLocation.setEnabled(false);
 					// reset log table
 					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.getData().clear();
 					logModel.setData(logModel.getLogList());
+					logModel.fireTableDataChanged();
 					getLogsTable().updateUI();
 				}
 			}
@@ -195,8 +195,8 @@ public class LocationsTab extends JPanel {
 			public void mouseClicked(MouseEvent e) {
 				if(locationsModel.getSize() > 0) {
 					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.getData().clear();
 					logModel.setData(logModel.getLogsByLocation(locationList.getSelectedValue().getId()));
+					logModel.fireTableDataChanged();
 					getLogsTable().updateUI();
 					getLogsTable().clearSelection();
 					btnDeleteLocation.setEnabled(true);
