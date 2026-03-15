@@ -23,31 +23,39 @@ public class Utilities {
 	public Utilities() {}
 	
 	public static Object geocode(String q) throws MalformedURLException, IOException, org.json.simple.parser.ParseException {
-		URL url = new URL("http://nominatim.openstreetmap.org/search?q="+ URLEncoder.encode(q, "UTF-8") +"&format=json&limit=1&addressdetails=1");
-		
+		URL url = new URL("https://nominatim.openstreetmap.org/search?q="+ URLEncoder.encode(q, "UTF-8") +"&format=json&limit=1&addressdetails=1");
+
 		HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 		conn.setRequestMethod("GET");
-		conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-				
+		conn.setRequestProperty("User-Agent", "logbook/1.0");
+
 		BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
 		String inputLine;
 		StringBuffer response = new StringBuffer();
-		
+
 		while((inputLine = in.readLine()) != null) {
 			response.append(inputLine);
 		}
 		in.close();
-		
+
+		String responseStr = response.toString().trim();
+		if (responseStr.isEmpty()) {
+			return null;
+		}
+
 		JSONParser parser = new JSONParser();
-		Object obj = parser.parse(response.toString());
+		Object obj = parser.parse(responseStr);
 		JSONArray ary = (JSONArray) obj;
+		if (ary.isEmpty()) {
+			return null;
+		}
 		JSONObject place = (JSONObject) ary.get(0);
-		
+
 		JSONObject address = (JSONObject) place.get("address");
 		double dblLat = (double) Math.round(Double.parseDouble((String) place.get("lat")) * 1000) / 1000;
 		double dblLon = (double) Math.round(Double.parseDouble((String) place.get("lon")) * 1000) / 1000;
 		Geocode gc = new Geocode(String.valueOf(dblLat), String.valueOf(dblLon), String.valueOf(address.get("city")), String.valueOf(address.get("state")));
-		
+
 		return gc;
 	}
 	
