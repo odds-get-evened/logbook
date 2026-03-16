@@ -47,12 +47,7 @@ public class MainWin extends JFrame {
 		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 		this.setResizable(true);
 
-		/**
-		 * For debug output outside of IDE
-		 * @todo Turn off for production release
-		 */
 		setDebugger(new Debugger());
-		getDebugger().setVisible(true);
 
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 		int winW = 1200;
@@ -130,6 +125,7 @@ public class MainWin extends JFrame {
 
 		logsPanel.getLogsTable().setLogInteraction(this.getLogInteraction());
 		logsPanel.getLogsTable().setMapPanel(mapPanel);
+		this.getLogInteraction().getLocationsTab().setMapPanel(mapPanel);
 		
 		rightPanel.add(this.getLogInteraction(), BorderLayout.CENTER);
 		

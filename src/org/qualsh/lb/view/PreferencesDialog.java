@@ -27,11 +27,20 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.EtchedBorder;
 import javax.swing.border.TitledBorder;
 
-import org.json.simple.parser.ParseException;
-import org.qualsh.lb.util.Geocode;
+import org.jxmapviewer.viewer.GeoPosition;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+import org.qualsh.lb.MainWin;
+import org.qualsh.lb.view.MapPanel;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Preferences;
-import org.qualsh.lb.util.Utilities;
 import org.qualsh.lb.view.field.CoordinateTextField;
 
 public class PreferencesDialog extends JDialog {
@@ -83,9 +92,9 @@ public class PreferencesDialog extends JDialog {
 		panel.add(panel_1, gbc_panel_1);
 		GridBagLayout gbl_panel_1 = new GridBagLayout();
 		gbl_panel_1.columnWidths = new int[]{0, 0, 0};
-		gbl_panel_1.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
+		gbl_panel_1.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0};
 		gbl_panel_1.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
-		gbl_panel_1.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_panel_1.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
 		panel_1.setLayout(gbl_panel_1);
 		
 		JLabel lblCurrentLocation_1 = new JLabel("Current location");
@@ -139,23 +148,36 @@ public class PreferencesDialog extends JDialog {
 		btnFindLocation.addActionListener(new ActionListener() {
 
 			public void actionPerformed(ActionEvent e) {
-				
-				if(!PreferencesDialog.this.getTextFindLocation().getText().isEmpty()) {
+				String q = PreferencesDialog.this.getTextFindLocation().getText().trim();
+				if (q.isEmpty()) return;
+				PreferencesDialog.this.getLblCurrentLocation().setText("Searching…");
+				new Thread(() -> {
 					try {
-						Geocode gc = (Geocode) Utilities.geocode(PreferencesDialog.this.getTextFindLocation().getText().trim());
-						if (gc != null) {
-							PreferencesDialog.this.getTextLatitude().setText(gc.getLatitude());
-							PreferencesDialog.this.getTextLongitude().setText(gc.getLongitude());
-							PreferencesDialog.this.getLblCurrentLocation().setText(gc.getCity()+", "+gc.getState());
+						String encoded = URLEncoder.encode(q, StandardCharsets.UTF_8);
+						String url = "https://nominatim.openstreetmap.org/search?q=" + encoded + "&format=json&limit=1";
+						HttpClient client = HttpClient.newHttpClient();
+						HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+								.header("User-Agent", "LogBook/1.0 radio-log-application").build();
+						HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+						JSONArray results = (JSONArray) new JSONParser().parse(resp.body());
+						if (results == null || results.isEmpty()) {
+							javax.swing.SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("No results found"));
+							return;
 						}
-					} catch (MalformedURLException e1) {
-						e1.printStackTrace();
-					} catch (IOException e1) {
-						e1.printStackTrace();
-					} catch (ParseException e1) {
-						e1.printStackTrace();
+						JSONObject first = (JSONObject) results.get(0);
+						String lat = String.format("%.5f", Double.parseDouble((String) first.get("lat")));
+						String lon = String.format("%.5f", Double.parseDouble((String) first.get("lon")));
+						String name = (String) first.get("display_name");
+						String shortName = name != null ? name.split(",")[0] : "Found";
+						javax.swing.SwingUtilities.invokeLater(() -> {
+							PreferencesDialog.this.getTextLatitude().setText(lat);
+							PreferencesDialog.this.getTextLongitude().setText(lon);
+							PreferencesDialog.this.getLblCurrentLocation().setText(shortName);
+						});
+					} catch (Exception ex) {
+						javax.swing.SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("Search failed"));
 					}
-				}
+				}, "PrefDlg-geocode").start();
 			}
 			
 		});
@@ -196,6 +218,36 @@ public class PreferencesDialog extends JDialog {
 		gbc_textLongitude.gridy = 3;
 		panel_1.add(textLongitude, gbc_textLongitude);
 		
+		// Pick from map button
+		JButton btnPickFromMap = new JButton("Pick from Map");
+		btnPickFromMap.setToolTipText("Click on the map to set your RX location");
+		GridBagConstraints gbc_btnPickFromMap = new GridBagConstraints();
+		gbc_btnPickFromMap.anchor = GridBagConstraints.WEST;
+		gbc_btnPickFromMap.insets = new Insets(0, 0, 5, 0);
+		gbc_btnPickFromMap.gridx = 1;
+		gbc_btnPickFromMap.gridy = 4;
+		panel_1.add(btnPickFromMap, gbc_btnPickFromMap);
+		btnPickFromMap.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				if (PreferencesDialog.this.getOwner() instanceof MainWin) {
+					MainWin mw = (MainWin) PreferencesDialog.this.getOwner();
+					MapPanel mp = mw.getMapPanel();
+					PreferencesDialog.this.setVisible(false);
+					mp.setPickingMode(true, pos -> {
+						mp.setPickingMode(false, null);
+						String lat = String.format("%.5f", pos.getLatitude());
+						String lon = String.format("%.5f", pos.getLongitude());
+						javax.swing.SwingUtilities.invokeLater(() -> {
+							PreferencesDialog.this.getTextLatitude().setText(lat);
+							PreferencesDialog.this.getTextLongitude().setText(lon);
+							PreferencesDialog.this.getLblCurrentLocation().setText(lat + ", " + lon);
+							PreferencesDialog.this.setVisible(true);
+						});
+					});
+				}
+			}
+		});
+
 		// reset user's location preference
 		btnReset = new JButton("Reset");
 		btnReset.addActionListener(new ActionListener() {
@@ -213,7 +265,7 @@ public class PreferencesDialog extends JDialog {
 		GridBagConstraints gbc_btnReset = new GridBagConstraints();
 		gbc_btnReset.anchor = GridBagConstraints.EAST;
 		gbc_btnReset.gridx = 1;
-		gbc_btnReset.gridy = 4;
+		gbc_btnReset.gridy = 5;
 		panel_1.add(btnReset, gbc_btnReset);
 		
 		JPanel panel_3 = new JPanel();

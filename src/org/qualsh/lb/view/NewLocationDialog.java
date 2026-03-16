@@ -48,6 +48,18 @@ import org.qualsh.lb.view.field.CoordinateTextField;
 import org.qualsh.lb.view.field.FrequencyTextField;
 import org.qualsh.lb.view.field.GenericTimeField;
 
+import org.jxmapviewer.viewer.GeoPosition;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import javax.swing.SwingUtilities;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
+import org.json.simple.parser.JSONParser;
+
 public class NewLocationDialog extends JDialog {
 
 	private static final long serialVersionUID = 5688646621779509239L;
@@ -245,27 +257,124 @@ public class NewLocationDialog extends JDialog {
 		gbc_panel_2.gridy = 6;
 		panel.add(panel_2, gbc_panel_2);
 		GridBagLayout gbl_panel_2 = new GridBagLayout();
-		gbl_panel_2.columnWidths = new int[]{0, 0, 0};
-		gbl_panel_2.rowHeights = new int[]{0, 0, 0};
-		gbl_panel_2.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
-		gbl_panel_2.rowWeights = new double[]{0.0, 0.0, Double.MIN_VALUE};
+		gbl_panel_2.columnWidths = new int[]{0, 0, 0, 0};
+		gbl_panel_2.rowHeights = new int[]{0, 0, 0, 0, 0};
+		gbl_panel_2.columnWeights = new double[]{0.0, 1.0, 0.0, Double.MIN_VALUE};
+		gbl_panel_2.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
 		panel_2.setLayout(gbl_panel_2);
-		
+
+		// Geocode search row
+		JLabel lblSearchCoord = new JLabel("Search");
+		GridBagConstraints gbc_lblSearchCoord = new GridBagConstraints();
+		gbc_lblSearchCoord.anchor = GridBagConstraints.EAST;
+		gbc_lblSearchCoord.insets = new Insets(0, 0, 5, 5);
+		gbc_lblSearchCoord.gridx = 0;
+		gbc_lblSearchCoord.gridy = 0;
+		panel_2.add(lblSearchCoord, gbc_lblSearchCoord);
+
+		JTextField textGeoSearch = new JTextField();
+		textGeoSearch.setToolTipText("Enter a place name to look up its coordinates");
+		GridBagConstraints gbc_textGeoSearch = new GridBagConstraints();
+		gbc_textGeoSearch.insets = new Insets(0, 0, 5, 5);
+		gbc_textGeoSearch.fill = GridBagConstraints.HORIZONTAL;
+		gbc_textGeoSearch.gridx = 1;
+		gbc_textGeoSearch.gridy = 0;
+		panel_2.add(textGeoSearch, gbc_textGeoSearch);
+		textGeoSearch.setColumns(10);
+
+		JButton btnGeoSearch = new JButton("Find");
+		GridBagConstraints gbc_btnGeoSearch = new GridBagConstraints();
+		gbc_btnGeoSearch.insets = new Insets(0, 0, 5, 0);
+		gbc_btnGeoSearch.gridx = 2;
+		gbc_btnGeoSearch.gridy = 0;
+		panel_2.add(btnGeoSearch, gbc_btnGeoSearch);
+
+		JLabel lblGeoStatus = new JLabel(" ");
+		lblGeoStatus.setFont(new Font("Tahoma", Font.ITALIC, 10));
+		GridBagConstraints gbc_lblGeoStatus = new GridBagConstraints();
+		gbc_lblGeoStatus.gridwidth = 3;
+		gbc_lblGeoStatus.anchor = GridBagConstraints.WEST;
+		gbc_lblGeoStatus.insets = new Insets(0, 0, 5, 0);
+		gbc_lblGeoStatus.gridx = 0;
+		gbc_lblGeoStatus.gridy = 1;
+		panel_2.add(lblGeoStatus, gbc_lblGeoStatus);
+
+		Runnable doGeoSearch = () -> {
+			String q = textGeoSearch.getText().trim();
+			if (q.isEmpty()) return;
+			SwingUtilities.invokeLater(() -> lblGeoStatus.setText("Searching…"));
+			new Thread(() -> {
+				try {
+					String encoded = URLEncoder.encode(q, StandardCharsets.UTF_8);
+					String url = "https://nominatim.openstreetmap.org/search?q=" + encoded + "&format=json&limit=1";
+					HttpClient client = HttpClient.newHttpClient();
+					HttpRequest req = HttpRequest.newBuilder().uri(URI.create(url))
+							.header("User-Agent", "LogBook/1.0 radio-log-application").build();
+					HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
+					JSONArray results = (JSONArray) new JSONParser().parse(resp.body());
+					if (results == null || results.isEmpty()) {
+						SwingUtilities.invokeLater(() -> lblGeoStatus.setText("No results found"));
+						return;
+					}
+					JSONObject first = (JSONObject) results.get(0);
+					String lat = (String) first.get("lat");
+					String lon = (String) first.get("lon");
+					String name = (String) first.get("display_name");
+					String shortName = name != null ? name.split(",")[0] : "Found";
+					SwingUtilities.invokeLater(() -> {
+						textLatitude.setText(String.format("%.5f", Double.parseDouble(lat)));
+						textLongitude.setText(String.format("%.5f", Double.parseDouble(lon)));
+						lblGeoStatus.setText(shortName);
+					});
+				} catch (Exception ex) {
+					SwingUtilities.invokeLater(() -> lblGeoStatus.setText("Search failed: " + ex.getMessage()));
+				}
+			}, "NewLocDlg-geocode").start();
+		};
+		btnGeoSearch.addActionListener(e -> doGeoSearch.run());
+		textGeoSearch.addActionListener(e -> doGeoSearch.run());
+
+		// Pick from map button
+		JButton btnPickFromMap = new JButton("Pick from Map");
+		btnPickFromMap.setToolTipText("Click on the map to set coordinates");
+		GridBagConstraints gbc_btnPickFromMap = new GridBagConstraints();
+		gbc_btnPickFromMap.gridwidth = 3;
+		gbc_btnPickFromMap.anchor = GridBagConstraints.WEST;
+		gbc_btnPickFromMap.insets = new Insets(0, 0, 5, 0);
+		gbc_btnPickFromMap.gridx = 0;
+		gbc_btnPickFromMap.gridy = 2;
+		panel_2.add(btnPickFromMap, gbc_btnPickFromMap);
+		btnPickFromMap.addActionListener(e -> {
+			if (NewLocationDialog.this.getOwner() instanceof MainWin) {
+				MainWin mw = (MainWin) NewLocationDialog.this.getOwner();
+				MapPanel mp = mw.getMapPanel();
+				NewLocationDialog.this.setVisible(false);
+				mp.setPickingMode(true, pos -> {
+					mp.setPickingMode(false, null);
+					textLatitude.setText(String.format("%.5f", pos.getLatitude()));
+					textLongitude.setText(String.format("%.5f", pos.getLongitude()));
+					lblGeoStatus.setText(String.format("%.4f°, %.4f°", pos.getLatitude(), pos.getLongitude()));
+					SwingUtilities.invokeLater(() -> NewLocationDialog.this.setVisible(true));
+				});
+			}
+		});
+
 		lblLatitude = new JLabel("Latitude");
 		GridBagConstraints gbc_lblLatitude = new GridBagConstraints();
 		gbc_lblLatitude.anchor = GridBagConstraints.EAST;
 		gbc_lblLatitude.insets = new Insets(0, 0, 5, 5);
 		gbc_lblLatitude.gridx = 0;
-		gbc_lblLatitude.gridy = 0;
+		gbc_lblLatitude.gridy = 3;
 		panel_2.add(lblLatitude, gbc_lblLatitude);
 		
 		textLatitude = new CoordinateTextField();
 		textLatitude.setDocument(new TextDocument(10));
 		GridBagConstraints gbc_textLatitude = new GridBagConstraints();
+		gbc_textLatitude.gridwidth = 2;
 		gbc_textLatitude.insets = new Insets(0, 0, 5, 0);
 		gbc_textLatitude.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textLatitude.gridx = 1;
-		gbc_textLatitude.gridy = 0;
+		gbc_textLatitude.gridy = 3;
 		panel_2.add(textLatitude, gbc_textLatitude);
 		textLatitude.setColumns(10);
 		
@@ -274,16 +383,17 @@ public class NewLocationDialog extends JDialog {
 		gbc_lblLongitude.anchor = GridBagConstraints.EAST;
 		gbc_lblLongitude.insets = new Insets(0, 0, 0, 5);
 		gbc_lblLongitude.gridx = 0;
-		gbc_lblLongitude.gridy = 1;
+		gbc_lblLongitude.gridy = 4;
 		panel_2.add(lblLongitude, gbc_lblLongitude);
 		
 		textLongitude = new CoordinateTextField();
 		((CoordinateTextField) textLongitude).setIsLongitude(true);
 		textLongitude.setDocument(new TextDocument(11));
 		GridBagConstraints gbc_textLongitude = new GridBagConstraints();
+		gbc_textLongitude.gridwidth = 2;
 		gbc_textLongitude.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textLongitude.gridx = 1;
-		gbc_textLongitude.gridy = 1;
+		gbc_textLongitude.gridy = 4;
 		panel_2.add(textLongitude, gbc_textLongitude);
 		textLongitude.setColumns(10);
 		

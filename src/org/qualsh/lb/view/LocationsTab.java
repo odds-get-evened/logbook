@@ -33,6 +33,7 @@ import org.qualsh.lb.data.ViewLocationsModel;
 import org.qualsh.lb.data.ViewStationsModel;
 import org.qualsh.lb.location.Location;
 import org.qualsh.lb.station.Station;
+import org.qualsh.lb.view.MapPanel;
 
 public class LocationsTab extends JPanel {
 
@@ -42,6 +43,7 @@ public class LocationsTab extends JPanel {
 	private LogsTable logsTable;
 	private JButton btnDeleteLocation;
 	private JButton btnDeleteStation;
+	private MapPanel mapPanel;
 
 	public LocationsTab() {
 		setLayout(new BorderLayout(0, 0));
@@ -194,12 +196,23 @@ public class LocationsTab extends JPanel {
 
 			public void mouseClicked(MouseEvent e) {
 				if(locationsModel.getSize() > 0) {
+					Location selected = locationList.getSelectedValue();
 					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.setData(logModel.getLogsByLocation(locationList.getSelectedValue().getId()));
+					logModel.setData(logModel.getLogsByLocation(selected.getId()));
 					logModel.fireTableDataChanged();
 					getLogsTable().updateUI();
 					getLogsTable().clearSelection();
 					btnDeleteLocation.setEnabled(true);
+					// Pan map to the selected location if it has coordinates
+					if (mapPanel != null) {
+						try {
+							String latStr = selected.getStrLatitude();
+							String lonStr = selected.getStrLongitude();
+							if (latStr != null && !latStr.isBlank() && lonStr != null && !lonStr.isBlank()) {
+								mapPanel.panToLocation(Double.parseDouble(latStr.trim()), Double.parseDouble(lonStr.trim()));
+							}
+						} catch (NumberFormatException ignored) {}
+					}
 				}
 			}
 
@@ -210,7 +223,7 @@ public class LocationsTab extends JPanel {
 			public void mouseEntered(MouseEvent e) {}
 
 			public void mouseExited(MouseEvent e) {}
-			
+
 		});
 		
 	}
@@ -266,6 +279,14 @@ public class LocationsTab extends JPanel {
 
 	public LogsTable getLogsTable() {
 		return logsTable;
+	}
+
+	public void setMapPanel(MapPanel mapPanel) {
+		this.mapPanel = mapPanel;
+	}
+
+	public MapPanel getMapPanel() {
+		return mapPanel;
 	}
 	
 	public class StationListCellRenderer implements ListCellRenderer<Station> {
