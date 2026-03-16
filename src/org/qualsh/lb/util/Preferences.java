@@ -10,11 +10,39 @@ import org.qualsh.lb.place.Place;
 
 
 public class Preferences {
-	
+
 	public static final String PREF_NAME_MY_PLACE = "my_place";
+	public static final String PREF_NAME_THEME = "ui_theme";
 
 	public Preferences() {
 		
+	}
+
+	public static void save(String name, String value) {
+		Connection db = Data.getConnection();
+		PreparedStatement ps = null;
+		try {
+			ps = db.prepareStatement("INSERT OR REPLACE INTO preferences ("
+					+ "id, pref_name, pref_value) VALUES ("
+					+ "(SELECT id FROM preferences WHERE pref_name = ?), ?, ?)");
+			ps.setString(1, name);
+			ps.setString(2, name);
+			ps.setString(3, value);
+			ps.execute();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				ps.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			try {
+				db.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 
 	public static void saveMyPlace(Place place) {

@@ -22,8 +22,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
 
 import org.qualsh.lb.data.Data;
 import org.qualsh.lb.data.LogsModel;
@@ -61,18 +59,6 @@ public class MainWin extends JFrame {
 		int winX = (int) ((screenSize.getWidth() - this.getSize().getWidth()) / 2);
 		int winY = (int) ((screenSize.getHeight() - this.getSize().getHeight()) / 2);
 		setLocation(winX, winY);
-		
-		try {
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (InstantiationException e) {
-			e.printStackTrace();
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-		} catch (UnsupportedLookAndFeelException e) {
-			e.printStackTrace();
-		}
 		
 		this.setTitle("Log Book v." + App.VERSION);
 		
