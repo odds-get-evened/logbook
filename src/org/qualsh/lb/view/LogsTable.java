@@ -168,7 +168,7 @@ public class LogsTable extends JTable {
 		li.getTextInfoDateOn().setText("");
 		li.getTextInfoDesc().setText("");
 		
-		li.getViewLocationPanel().setCurrentLocation(null);
+		li.getViewLocationPanel().setCurrentPlace(null);
 		li.getViewLocationPanel().resetFields();
 		
 		li.getViewRXPanel().setCurrentPlace(null);
@@ -178,14 +178,14 @@ public class LogsTable extends JTable {
 	private void fillFields(Log log) {
 		LogInteraction li = getLogInteraction();
 		
-		li.getViewLocationPanel().setCurrentLocation(null);
+		li.getViewLocationPanel().setCurrentPlace(null);
 		li.getViewLocationPanel().resetFields();
-		
+
 		li.getTextInfoFreq().setText(String.valueOf(log.getFrequency() + " " + log.getMode()));
 		li.getTextInfoDateOn().setText(Utilities.unixTimestampToString(log.getDateOn(), "MM/dd/yyyy HH:mm"));
 		li.getTextInfoDesc().setText(log.getDescription());
-		
-		li.getViewLocationPanel().setCurrentLocation(log.getFullLocation());
+
+		li.getViewLocationPanel().setCurrentPlace(log.getFullTxPlace());
 		li.getViewLocationPanel().fillFields();
 		
 		li.getViewRXPanel().setCurrentPlace(log.getFullMyPlace());
