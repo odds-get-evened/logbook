@@ -44,6 +44,7 @@ public class PlacePickerDialog extends JDialog {
 	private ViewPlacesModel placesModel;
 	private Place selectedPlace = null;
 	private JButton btnSelect;
+	private Runnable onPlaceCreated;
 
 	public PlacePickerDialog(JFrame owner) {
 		super(owner, "Select My Location", true);
@@ -145,6 +146,8 @@ public class PlacePickerDialog extends JDialog {
 							break;
 						}
 					}
+					// Notify external listener (e.g. LocationsTab) of the new place
+					if (onPlaceCreated != null) onPlaceCreated.run();
 				}
 			}
 		});
@@ -155,6 +158,11 @@ public class PlacePickerDialog extends JDialog {
 	/** Returns the Place the user selected, or null if cancelled. */
 	public Place getSelectedPlace() {
 		return selectedPlace;
+	}
+
+	/** Register a callback invoked when a new Place is created inside this dialog. */
+	public void setOnPlaceCreated(Runnable r) {
+		this.onPlaceCreated = r;
 	}
 
 	private static class PlaceCellRenderer implements ListCellRenderer<Place> {

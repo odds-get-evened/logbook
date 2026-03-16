@@ -47,6 +47,7 @@ public class LocationsTab extends JPanel {
 	private MapPanel mapPanel;
 	private JButton btnEdit;
 	private JButton btnDelete;
+	private Runnable onPlacesChanged;
 
 	public LocationsTab() {
 		setLayout(new BorderLayout(0, 0));
@@ -200,10 +201,16 @@ public class LocationsTab extends JPanel {
 		});
 	}
 
-	/** Reload the places list from the database. */
+	/** Reload the places list from the database and notify any registered listener. */
 	public void refreshList() {
 		placesModel.setAllPlaces();
 		placeList.updateUI();
+		if (onPlacesChanged != null) onPlacesChanged.run();
+	}
+
+	/** Register a callback invoked whenever the places list is refreshed (add/edit/delete). */
+	public void setOnPlacesChanged(Runnable r) {
+		this.onPlacesChanged = r;
 	}
 
 	public void setLogsTable(LogsTable logsTable) {
