@@ -95,6 +95,34 @@ public class Place {
 		return null;
 	}
 	
+	public boolean update() {
+		Connection db = Data.getConnection();
+		PreparedStatement ps = null;
+		try {
+			ps = db.prepareStatement("UPDATE places SET place_name = ?, lat = ?, lon = ? WHERE id = ?");
+			ps.setString(1, this.getPlaceName());
+			ps.setString(2, this.getLatitude());
+			ps.setString(3, this.getLongitude());
+			ps.setInt(4, this.getId());
+			ps.execute();
+			return true;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return false;
+		} finally {
+			try {
+				if (ps != null) ps.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			try {
+				db.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
 	public int insert() {
 		Connection db = Data.getConnection();
 		try {

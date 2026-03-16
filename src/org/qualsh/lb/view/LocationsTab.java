@@ -3,278 +3,211 @@ package org.qualsh.lb.view;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Types;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.UIDefaults;
 import javax.swing.UIManager;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
-import org.qualsh.lb.data.Data;
 import org.qualsh.lb.data.LogsModel;
-import org.qualsh.lb.data.ViewLocationsModel;
-import org.qualsh.lb.data.ViewStationsModel;
-import org.qualsh.lb.location.Location;
-import org.qualsh.lb.station.Station;
-import org.qualsh.lb.view.MapPanel;
+import org.qualsh.lb.data.ViewPlacesModel;
+import org.qualsh.lb.place.Place;
 
+/**
+ * Locations tab — manages the user's own station locations (Places).
+ * Users can add, edit, and delete their custom locations. Selecting a
+ * location pans the map to it and filters the log table to entries recorded
+ * from that location.
+ */
 public class LocationsTab extends JPanel {
 
 	private static final long serialVersionUID = -7174045351909746608L;
-	private JList<Station> stationList;
-	private JList<Location> locationList;
+
+	private JList<Place> placeList;
+	private ViewPlacesModel placesModel;
 	private LogsTable logsTable;
-	private JButton btnDeleteLocation;
-	private JButton btnDeleteStation;
 	private MapPanel mapPanel;
+	private JButton btnEdit;
+	private JButton btnDelete;
 
 	public LocationsTab() {
 		setLayout(new BorderLayout(0, 0));
-		
-		JSplitPane splitPane = new JSplitPane();
-		add(splitPane, BorderLayout.CENTER);
-		
-		JPanel stationsPanel = new JPanel();
-		stationsPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		splitPane.setLeftComponent(stationsPanel);
-		final ViewStationsModel stationsModel = new ViewStationsModel();
-		stationsModel.setAllStations();
-		stationsPanel.setLayout(new BorderLayout(0, 0));
-		
-		JPanel panel = new JPanel();
-		stationsPanel.add(panel, BorderLayout.NORTH);
-		panel.setLayout(new BorderLayout(0, 0));
-		
-		JLabel lblStations = new JLabel("Stations");
-		lblStations.setFont(new Font("Tahoma", Font.BOLD, 12));
-		panel.add(lblStations, BorderLayout.NORTH);
-		
-		JLabel lblSelectStation = new JLabel("Select a station below to list its locations.");
-		lblSelectStation.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		panel.add(lblSelectStation, BorderLayout.SOUTH);
-		
-		JPanel panel_2 = new JPanel();
-		stationsPanel.add(panel_2, BorderLayout.SOUTH);
-		
-		btnDeleteStation = new JButton("Delete");
-		btnDeleteStation.setEnabled(false);
-		btnDeleteStation.addActionListener(new ActionListener() {
 
-			public void actionPerformed(ActionEvent e) {
-				int dialogBtn = JOptionPane.YES_NO_OPTION;
-				int conf = JOptionPane.showConfirmDialog(null, "Select Yes to confirm, and No to cancel. All related locations will be removed as well.", "Warning", dialogBtn);
-				
-				if(conf == JOptionPane.YES_OPTION) {
-					int stationId = stationList.getSelectedValue().getId();
-					deleteStation(stationId);
-					// reset stations list
-					ViewStationsModel stationModel = (ViewStationsModel) getStationList().getModel();
-					stationModel.setAllStations();
-					getStationList().setSelectedValue(null, true);
-					btnDeleteStation.setEnabled(false);
-					// reset locations list
-					ViewLocationsModel locationModel = (ViewLocationsModel) getLocationList().getModel();
-					locationModel.setAllLocations();
-					getLocationList().setSelectedValue(null, true);
-					btnDeleteLocation.setEnabled(false);
-					// reset logs table
-					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.setData(logModel.getLogList());
-					logModel.fireTableDataChanged();
-					getLogsTable().updateUI();
-				}
-				
-			}
-			
-		});
-		panel_2.add(btnDeleteStation);
-		
-		JScrollPane scrollPane_1 = new JScrollPane();
-		stationsPanel.add(scrollPane_1, BorderLayout.CENTER);
-		
-		stationList = new JList<Station>();
-		scrollPane_1.setViewportView(stationList);
-		stationList.setCellRenderer(new StationListCellRenderer());
-		stationList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		stationList.setModel(stationsModel);
-		stationList.addMouseListener(new MouseListener() {
+		// --- Header ---
+		JPanel headerPanel = new JPanel(new BorderLayout(0, 4));
+		headerPanel.setBorder(new EmptyBorder(8, 8, 4, 8));
+		add(headerPanel, BorderLayout.NORTH);
 
-			public void mouseClicked(MouseEvent e) {
-				if(stationsModel.getSize() > 0) {
-					ViewLocationsModel locModel = (ViewLocationsModel) getLocationList().getModel();
-					locModel.setLocationsByStation(stationList.getSelectedValue().getId());
-					getLocationList().clearSelection();
-					btnDeleteStation.setEnabled(true);
-				}
-			}
+		JLabel lblTitle = new JLabel("My Station Locations");
+		lblTitle.setFont(new Font("Tahoma", Font.BOLD, 13));
+		headerPanel.add(lblTitle, BorderLayout.NORTH);
 
-			public void mousePressed(MouseEvent e) {}
+		JLabel lblHint = new JLabel("Add your own listening locations. Select one to filter the log.");
+		lblHint.setFont(new Font("Tahoma", Font.PLAIN, 11));
+		headerPanel.add(lblHint, BorderLayout.SOUTH);
 
-			public void mouseReleased(MouseEvent e) {}
+		// --- List ---
+		placesModel = new ViewPlacesModel();
+		placesModel.setAllPlaces();
 
-			public void mouseEntered(MouseEvent e) {}
+		placeList = new JList<>(placesModel);
+		placeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		placeList.setCellRenderer(new PlaceCellRenderer());
 
-			public void mouseExited(MouseEvent e) {}
-			
-		});
-		
-		JPanel locationsPanel = new JPanel();
-		locationsPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		splitPane.setRightComponent(locationsPanel);
-		final ViewLocationsModel locationsModel = new ViewLocationsModel();
-		locationsModel.setAllLocations();
-		locationsPanel.setLayout(new BorderLayout(0, 0));
-		
-		JPanel panel_3 = new JPanel();
-		locationsPanel.add(panel_3, BorderLayout.SOUTH);
-		
-		btnDeleteLocation = new JButton("Delete");
-		btnDeleteLocation.setEnabled(false);
-		btnDeleteLocation.addActionListener(new ActionListener() {
+		JScrollPane scrollPane = new JScrollPane(placeList);
+		scrollPane.setBorder(new EmptyBorder(0, 8, 0, 8));
+		add(scrollPane, BorderLayout.CENTER);
 
-			public void actionPerformed(ActionEvent e) {
-				int dialogBtn = JOptionPane.YES_NO_OPTION;
-				int confirm = JOptionPane.showConfirmDialog(null, "Select Yes to confirm, and No to cancel.", "Warning", dialogBtn);
-				
-				if(confirm == JOptionPane.YES_OPTION) {
-					int locationId = getLocationList().getSelectedValue().getId();
-					deleteLocation(locationId);
-					// reset locations list
-					ViewLocationsModel locationModel = (ViewLocationsModel) getLocationList().getModel();
-					locationModel.setAllLocations();
-					getLocationList().setSelectedValue(null, true);
-					btnDeleteLocation.setEnabled(false);
-					// reset log table
-					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.setData(logModel.getLogList());
-					logModel.fireTableDataChanged();
-					getLogsTable().updateUI();
-				}
-			}
-			
-		});
-		panel_3.add(btnDeleteLocation);
-		
-		JPanel panel_1 = new JPanel();
-		locationsPanel.add(panel_1, BorderLayout.NORTH);
-		panel_1.setLayout(new BorderLayout(0, 0));
-		
-		JLabel lblLocations = new JLabel("Locations");
-		lblLocations.setFont(new Font("Tahoma", Font.BOLD, 12));
-		panel_1.add(lblLocations, BorderLayout.NORTH);
-		
-		JLabel lblSelectLocation = new JLabel("Select a location below to list its log entries.");
-		lblSelectLocation.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		panel_1.add(lblSelectLocation, BorderLayout.SOUTH);
-		
-		JScrollPane scrollPane = new JScrollPane();
-		locationsPanel.add(scrollPane, BorderLayout.CENTER);
-		
-		locationList = new JList<Location>();
-		locationList.setVisibleRowCount(4);
-		scrollPane.setViewportView(locationList);
-		locationList.setCellRenderer(new LocationListCellRenderer());
-		locationList.setModel(locationsModel);
-		locationList.addMouseListener(new MouseListener() {
+		// --- Button bar ---
+		JPanel btnBar = new JPanel(new GridBagLayout());
+		btnBar.setBorder(new EmptyBorder(6, 8, 8, 8));
+		add(btnBar, BorderLayout.SOUTH);
 
-			public void mouseClicked(MouseEvent e) {
-				if(locationsModel.getSize() > 0) {
-					Location selected = locationList.getSelectedValue();
-					LogsModel logModel = (LogsModel) getLogsTable().getModel();
-					logModel.setData(logModel.getLogsByLocation(selected.getId()));
-					logModel.fireTableDataChanged();
-					getLogsTable().updateUI();
-					getLogsTable().clearSelection();
-					btnDeleteLocation.setEnabled(true);
-					// Pan map to the selected location if it has coordinates
+		GridBagConstraints gbc = new GridBagConstraints();
+		gbc.insets = new Insets(0, 0, 0, 4);
+
+		JButton btnAdd = new JButton("Add");
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		btnBar.add(btnAdd, gbc);
+
+		btnEdit = new JButton("Edit");
+		btnEdit.setEnabled(false);
+		gbc.gridx = 1;
+		btnBar.add(btnEdit, gbc);
+
+		btnDelete = new JButton("Delete");
+		btnDelete.setEnabled(false);
+		gbc.gridx = 2;
+		gbc.insets = new Insets(0, 0, 0, 0);
+		btnBar.add(btnDelete, gbc);
+
+		// --- Listeners ---
+
+		placeList.addListSelectionListener(new ListSelectionListener() {
+			public void valueChanged(ListSelectionEvent e) {
+				if (e.getValueIsAdjusting()) return;
+				Place selected = placeList.getSelectedValue();
+				boolean hasSelection = selected != null;
+				btnEdit.setEnabled(hasSelection);
+				btnDelete.setEnabled(hasSelection);
+
+				if (hasSelection) {
+					// Filter logs table by this place
+					if (logsTable != null) {
+						LogsModel logModel = (LogsModel) logsTable.getModel();
+						logModel.setData(logModel.getLogsByMyPlace(selected.getId()));
+						logModel.fireTableDataChanged();
+						logsTable.clearSelection();
+					}
+					// Pan map to the location
 					if (mapPanel != null) {
 						try {
-							String latStr = selected.getStrLatitude();
-							String lonStr = selected.getStrLongitude();
-							if (latStr != null && !latStr.isBlank() && lonStr != null && !lonStr.isBlank()) {
-								mapPanel.panToLocation(Double.parseDouble(latStr.trim()), Double.parseDouble(lonStr.trim()));
+							String lat = selected.getLatitude();
+							String lon = selected.getLongitude();
+							if (lat != null && !lat.isBlank() && lon != null && !lon.isBlank()) {
+								mapPanel.panToLocation(Double.parseDouble(lat.trim()), Double.parseDouble(lon.trim()));
 							}
 						} catch (NumberFormatException ignored) {}
 					}
 				}
 			}
-
-			public void mousePressed(MouseEvent e) {}
-
-			public void mouseReleased(MouseEvent e) {}
-
-			public void mouseEntered(MouseEvent e) {}
-
-			public void mouseExited(MouseEvent e) {}
-
 		});
-		
-	}
 
-	protected void deleteLocation(int locationId) {
-		this.unsetLogLocation(locationId, Data.getConnection());
-		
-		Connection conn = Data.getConnection();
-		
-		PreparedStatement ps = null;
-		try {
-			ps = conn.prepareStatement("DELETE FROM locations WHERE id = ?");
-			ps.setInt(1, locationId);
-			
-			ps.execute();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
+		// Show all logs again on deselect via double-click on empty area
+		placeList.addMouseListener(new MouseListener() {
+			public void mouseClicked(MouseEvent e) {
+				int index = placeList.locationToIndex(e.getPoint());
+				if (index < 0 || !placeList.getCellBounds(index, index).contains(e.getPoint())) {
+					placeList.clearSelection();
+					if (logsTable != null) {
+						LogsModel logModel = (LogsModel) logsTable.getModel();
+						logModel.setData(logModel.getLogList());
+						logModel.fireTableDataChanged();
+					}
+				}
 			}
-			
-			try {
-				conn.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
+			public void mousePressed(MouseEvent e) {}
+			public void mouseReleased(MouseEvent e) {}
+			public void mouseEntered(MouseEvent e) {}
+			public void mouseExited(MouseEvent e) {}
+		});
+
+		btnAdd.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				JFrame owner = (JFrame) javax.swing.SwingUtilities.getWindowAncestor(LocationsTab.this);
+				PlaceDialog dlg = new PlaceDialog(owner, null);
+				dlg.setVisible(true);
+				if (dlg.getResultPlace() != null) {
+					refreshList();
+				}
 			}
-		}
-		
+		});
+
+		btnEdit.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				Place selected = placeList.getSelectedValue();
+				if (selected == null) return;
+				JFrame owner = (JFrame) javax.swing.SwingUtilities.getWindowAncestor(LocationsTab.this);
+				PlaceDialog dlg = new PlaceDialog(owner, selected);
+				dlg.setVisible(true);
+				if (dlg.getResultPlace() != null) {
+					refreshList();
+				}
+			}
+		});
+
+		btnDelete.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				Place selected = placeList.getSelectedValue();
+				if (selected == null) return;
+				int confirm = JOptionPane.showConfirmDialog(
+					LocationsTab.this,
+					"Delete \"" + selected.getPlaceName() + "\"?\nLog entries using this location will be unlinked.",
+					"Confirm Delete",
+					JOptionPane.YES_NO_OPTION
+				);
+				if (confirm == JOptionPane.YES_OPTION) {
+					Place.delete(selected.getId());
+					placeList.clearSelection();
+					refreshList();
+					// Reset log table to show all
+					if (logsTable != null) {
+						LogsModel logModel = (LogsModel) logsTable.getModel();
+						logModel.setData(logModel.getLogList());
+						logModel.fireTableDataChanged();
+					}
+				}
+			}
+		});
 	}
 
-	public JList<Station> getStationList() {
-		return stationList;
+	/** Reload the places list from the database. */
+	public void refreshList() {
+		placesModel.setAllPlaces();
+		placeList.updateUI();
 	}
 
-	public void setStationList(JList<Station> stationList) {
-		this.stationList = stationList;
-	}
-
-	public JList<Location> getLocationList() {
-		return locationList;
-	}
-
-	public void setLocationList(JList<Location> locationList) {
-		this.locationList = locationList;
-	}
-
-	public void setLogsTable(LogsTable logTable) {
-		this.logsTable = logTable;
+	public void setLogsTable(LogsTable logsTable) {
+		this.logsTable = logsTable;
 	}
 
 	public LogsTable getLogsTable() {
@@ -288,199 +221,48 @@ public class LocationsTab extends JPanel {
 	public MapPanel getMapPanel() {
 		return mapPanel;
 	}
-	
-	public class StationListCellRenderer implements ListCellRenderer<Station> {
 
-		public Component getListCellRendererComponent(
-				JList<? extends Station> list, Station value, int index,
-				boolean isSelected, boolean cellHasFocus) {
-			
-			JPanel pnl = new JPanel();
-			pnl.setLayout(new BorderLayout());
-			pnl.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-			
-			JLabel lblTitle = new JLabel(value.getTitle());
-			lblTitle.setFont(new Font("Tahoma", Font.BOLD, 12));
-			pnl.add(lblTitle, BorderLayout.CENTER);
-			
-			UIDefaults defs = UIManager.getDefaults();
-			if(cellHasFocus || isSelected) {
-				pnl.setBackground(defs.getColor("List.selectionBackground"));
-				lblTitle.setForeground(defs.getColor("List.selectionForeground"));
-			} else {
-				pnl.setBackground(defs.getColor("List.background"));
-				lblTitle.setForeground(defs.getColor("List.foreground"));
-			}
-			
-			return pnl;
-		}
-		
+	public JList<Place> getPlaceList() {
+		return placeList;
 	}
-	
-	public class LocationListCellRenderer implements ListCellRenderer<Location> {
 
+	// ---------------------------------------------------------------
+	// Cell renderer
+	// ---------------------------------------------------------------
+
+	private static class PlaceCellRenderer implements ListCellRenderer<Place> {
 		public Component getListCellRendererComponent(
-				JList<? extends Location> list, Location value, int index,
+				JList<? extends Place> list, Place value, int index,
 				boolean isSelected, boolean cellHasFocus) {
-			
-			JPanel pnl = new JPanel();
-			pnl.setLayout(new BorderLayout());
-			pnl.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-			
-			JLabel lblName = new JLabel(value.getLocationName());
+
+			JPanel pnl = new JPanel(new BorderLayout(0, 2));
+			pnl.setBorder(BorderFactory.createEmptyBorder(5, 8, 5, 8));
+
+			JLabel lblName = new JLabel(value.getPlaceName());
 			lblName.setFont(new Font("Tahoma", Font.BOLD, 12));
-			pnl.add(lblName, BorderLayout.CENTER);
-			
-			JPanel metaPanel = new JPanel();
-			metaPanel.setLayout(new BorderLayout());
-			pnl.add(metaPanel, BorderLayout.SOUTH);
-			
-			JLabel lblFreq = new JLabel(value.getStrFrequency() + " kHz");
-			lblFreq.setFont(new Font("Tahoma", Font.PLAIN, 12));
-			metaPanel.add(lblFreq, BorderLayout.CENTER);
-			
-			JLabel lblTimes = new JLabel();
-			lblTimes.setFont(new Font("Tahoma", Font.PLAIN, 12));
-			StringBuilder sbTimes = new StringBuilder();
-			sbTimes.append(value.getStrTimeOn());
-			sbTimes.append(" to ");
-			sbTimes.append(value.getStrTimeOff());
-			lblTimes.setText(sbTimes.toString());
-			metaPanel.add(lblTimes, BorderLayout.SOUTH);
-			
+			pnl.add(lblName, BorderLayout.NORTH);
+
+			String lat = value.getLatitude();
+			String lon = value.getLongitude();
+			String coords = (lat != null && lon != null && !lat.isBlank() && !lon.isBlank())
+				? lat + ", " + lon : "No coordinates";
+			JLabel lblCoords = new JLabel(coords);
+			lblCoords.setFont(new Font("Tahoma", Font.PLAIN, 11));
+			pnl.add(lblCoords, BorderLayout.SOUTH);
+
 			UIDefaults defs = UIManager.getDefaults();
-			if(cellHasFocus || isSelected) {
+			if (isSelected || cellHasFocus) {
 				pnl.setBackground(defs.getColor("List.selectionBackground"));
-				metaPanel.setBackground(defs.getColor("List.selectionBackground"));
 				lblName.setForeground(defs.getColor("List.selectionForeground"));
-				lblTimes.setForeground(defs.getColor("List.selectionForeground"));
-				lblFreq.setForeground(defs.getColor("List.selectionForeground"));
+				lblCoords.setForeground(defs.getColor("List.selectionForeground"));
 			} else {
 				pnl.setBackground(defs.getColor("List.background"));
-				metaPanel.setBackground(defs.getColor("List.background"));
 				lblName.setForeground(defs.getColor("List.foreground"));
-				lblTimes.setForeground(defs.getColor("List.foreground"));
-				lblFreq.setForeground(defs.getColor("List.foreground"));
+				lblCoords.setForeground(defs.getColor("List.foreground"));
 			}
-			
+
 			return pnl;
-			
-		}
-		
-	}
-
-	public void deleteStation(int id) {		
-		Connection conn = Data.getConnection();
-		try {
-			conn.setAutoCommit(false);
-		} catch (SQLException e1) {
-			e1.printStackTrace();
-		}
-		
-		PreparedStatement ps = null;
-		try {
-			ps = conn.prepareStatement("DELETE FROM stations WHERE id = ?");
-			ps.setInt(1, id);
-			
-			ps.execute();
-			ps.close();
-			
-			deleteLocationsByStation(id, conn);
-						
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
 		}
 	}
 
-	private void deleteLocationsByStation(int stationId, Connection conn) {
-		PreparedStatement ps = null;
-		ResultSet rs = null;
-		try {
-			ps = conn.prepareStatement("SELECT id FROM locations WHERE station_id = ?");
-			ps.setInt(1, stationId);
-			rs = ps.executeQuery();
-			
-			while(rs.next()) {
-				unsetLogLocation(rs.getInt("id"), conn);
-			}
-			
-			deleteLocationByStation(stationId, conn);
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				rs.close();
-			} catch (SQLException e1) {
-				e1.printStackTrace();
-			}
-			
-			try {
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-		}
-		
-		try {
-			conn.commit();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-		
-		try {
-			conn.setAutoCommit(true);
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-		
-		try {
-			conn.close();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-	}
-
-	private void deleteLocationByStation(int stationId, Connection conn) {
-		PreparedStatement ps = null;
-		try {
-			ps = conn.prepareStatement("DELETE FROM locations WHERE station_id = ?");
-			ps.setInt(1, stationId);
-			
-			ps.execute();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	private void unsetLogLocation(int locationId, Connection conn) {
-		PreparedStatement ps = null;
-		try {
-			ps = conn.prepareStatement("UPDATE logs SET location = ? WHERE location = ?");
-			ps.setNull(1, Types.INTEGER);
-			ps.setInt(2, locationId);
-			
-			ps.execute();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		} finally {
-			try {
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-	
 }
