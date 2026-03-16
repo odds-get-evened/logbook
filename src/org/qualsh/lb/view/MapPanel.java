@@ -24,9 +24,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
@@ -50,19 +52,29 @@ import org.qualsh.lb.place.Place;
 /**
  * Map panel showing log TX/RX locations on an OpenStreetMap base layer.
  *
- * Red markers  = TX (transmitter) locations from log entries.
+ * Red markers  = TX (transmitter) locations.
  * Blue markers = RX (receiver / listening post) locations.
  * Orange marker = currently selected log's TX location.
  *
- * The search bar geocodes a place name via Nominatim and pans the map there.
- * The "Pick" toggle lets the user click the map to copy coordinates.
+ * Layer filters:
+ *   All Stations  – plots every location/place in the database.
+ *   Log Entries   – plots only TX/RX locations referenced by log entries.
  */
 public class MapPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
 
+    /** Which set of waypoints to display. */
+    enum LayerFilter { ALL_LOCATIONS, LOG_ENTRIES }
+
     private final JXMapViewer mapViewer;
-    private final Set<LogMapWaypoint> waypoints = new HashSet<>();
+
+    /** Waypoints derived from actual log entries (TX + RX per log). */
+    private final Set<LogMapWaypoint> logEntryWaypoints = new HashSet<>();
+    /** Waypoints from all locations/places in the database. */
+    private final Set<LogMapWaypoint> allLocWaypoints   = new HashSet<>();
+
+    private LayerFilter activeLayer = LayerFilter.ALL_LOCATIONS;
     private LogMapWaypoint selectedWaypoint = null;
 
     private boolean pickingMode = false;
@@ -111,7 +123,7 @@ public class MapPanel extends JPanel {
 
         // ---- search / toolbar panel ----
         JPanel toolbar = new JPanel(new GridBagLayout());
-        toolbar.setBorder(new EmptyBorder(4, 4, 4, 4));
+        toolbar.setBorder(new EmptyBorder(4, 4, 2, 4));
 
         searchField = new JTextField();
         JButton btnSearch = new JButton("Go");
@@ -121,7 +133,7 @@ public class MapPanel extends JPanel {
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0;
-        gbc.insets = new Insets(0, 0, 0, 4);
+        gbc.insets = new Insets(0, 0, 2, 4);
 
         gbc.gridx = 0;
         gbc.fill = GridBagConstraints.NONE;
@@ -145,6 +157,37 @@ public class MapPanel extends JPanel {
         gbc.weightx = 0.8;
         toolbar.add(statusLabel, gbc);
 
+        // ---- layer filter row ----
+        JRadioButton rbAllLocations = new JRadioButton("All Stations", true);
+        JRadioButton rbLogEntries   = new JRadioButton("Log Entries Only");
+        ButtonGroup layerGroup = new ButtonGroup();
+        layerGroup.add(rbAllLocations);
+        layerGroup.add(rbLogEntries);
+
+        rbAllLocations.addActionListener(e -> {
+            activeLayer = LayerFilter.ALL_LOCATIONS;
+            updatePainters();
+        });
+        rbLogEntries.addActionListener(e -> {
+            activeLayer = LayerFilter.LOG_ENTRIES;
+            updatePainters();
+        });
+
+        GridBagConstraints gbcL = new GridBagConstraints();
+        gbcL.gridy = 1;
+        gbcL.insets = new Insets(0, 0, 0, 4);
+
+        gbcL.gridx = 0;
+        gbcL.fill = GridBagConstraints.NONE;
+        toolbar.add(new JLabel("Layer:"), gbcL);
+
+        gbcL.gridx = 1;
+        toolbar.add(rbAllLocations, gbcL);
+
+        gbcL.gridx = 2;
+        gbcL.gridwidth = 3;
+        toolbar.add(rbLogEntries, gbcL);
+
         btnSearch.addActionListener(e -> geocodeSearch());
         searchField.addActionListener(e -> geocodeSearch());
         btnPick.addActionListener(e -> {
@@ -164,7 +207,35 @@ public class MapPanel extends JPanel {
     // -----------------------------------------------------------------------
 
     /**
-     * Plot all log entries on the map.  TX locations are red; RX locations are blue.
+     * Plot all database locations and places as markers (the "All Stations" layer).
+     * Runs DB lookups on a background thread.
+     */
+    public void plotAllLocations(List<Location> locations, List<Place> places) {
+        new Thread(() -> {
+            Set<LogMapWaypoint> fresh = new HashSet<>();
+            if (locations != null) {
+                for (Location loc : locations) {
+                    tryAddWaypoint(fresh, loc.getStrLatitude(), loc.getStrLongitude(),
+                            LogMapWaypoint.Type.TX, null);
+                }
+            }
+            if (places != null) {
+                for (Place place : places) {
+                    tryAddWaypoint(fresh, place.getLatitude(), place.getLongitude(),
+                            LogMapWaypoint.Type.RX, null);
+                }
+            }
+            SwingUtilities.invokeLater(() -> {
+                allLocWaypoints.clear();
+                allLocWaypoints.addAll(fresh);
+                updatePainters();
+            });
+        }, "MapPanel-plotAll").start();
+    }
+
+    /**
+     * Plot all log entries on the map (the "Log Entries" layer).
+     * TX locations are red; RX locations are blue.
      * Runs the DB lookups on a background thread to keep the EDT responsive.
      */
     public void plotLogs(List<Log> logs) {
@@ -184,8 +255,8 @@ public class MapPanel extends JPanel {
                 }
             }
             SwingUtilities.invokeLater(() -> {
-                waypoints.clear();
-                waypoints.addAll(fresh);
+                logEntryWaypoints.clear();
+                logEntryWaypoints.addAll(fresh);
                 selectedWaypoint = null;
                 updatePainters();
             });
@@ -194,10 +265,11 @@ public class MapPanel extends JPanel {
 
     /**
      * Highlight the TX location of the given log and pan the map to it.
+     * The selection highlight is shown regardless of the active layer.
      */
     public void highlightLog(Log log) {
         selectedWaypoint = null;
-        for (LogMapWaypoint wp : waypoints) {
+        for (LogMapWaypoint wp : logEntryWaypoints) {
             if (wp.getLog() != null
                     && wp.getLog().getId() == log.getId()
                     && wp.getType() == LogMapWaypoint.Type.TX) {
@@ -258,8 +330,14 @@ public class MapPanel extends JPanel {
     }
 
     private void updatePainters() {
+        // Build the display set from the active layer; always include the selected marker.
+        Set<LogMapWaypoint> active = (activeLayer == LayerFilter.ALL_LOCATIONS)
+                ? allLocWaypoints : logEntryWaypoints;
+        Set<LogMapWaypoint> displaySet = new HashSet<>(active);
+        if (selectedWaypoint != null) displaySet.add(selectedWaypoint);
+
         WaypointPainter<LogMapWaypoint> painter = new WaypointPainter<>();
-        painter.setWaypoints(new HashSet<>(waypoints));
+        painter.setWaypoints(displaySet);
         painter.setRenderer((g, map, wp) -> {
             Graphics2D g2 = (Graphics2D) g.create();
             try {
