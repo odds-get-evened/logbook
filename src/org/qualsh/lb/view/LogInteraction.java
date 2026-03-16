@@ -320,23 +320,27 @@ public class LogInteraction extends JPanel {
 				ColumnSpec.decode("default:grow"),},
 			new RowSpec[] {
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 2  Frequency
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 4  Mode
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 6  Date
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 8  Time
 				FormFactory.RELATED_GAP_ROWSPEC,
-				RowSpec.decode("default:grow"),
+				RowSpec.decode("default:grow"),    // 10 Description
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 12 TX Location panel
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 14 TX Location buttons
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 16 My Location (RX) name
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,}));
+				FormFactory.DEFAULT_ROWSPEC,       // 18 RX coordinates
+				FormFactory.RELATED_GAP_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,       // 20 My Location button
+				FormFactory.RELATED_GAP_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,}));   // 22 Save / Cancel
 		
 		label = new JLabel("Frequency");
 		label.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -344,8 +348,6 @@ public class LogInteraction extends JPanel {
 		
 		textFrequency = new FrequencyTextField();
 		logEntryForm.add(textFrequency, "4, 2, fill, default");
-		
-		editLocationPanel = new EditLocationPanel((Location) null);
 		
 		label_1 = new JLabel("Mode");
 		label_1.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -359,7 +361,28 @@ public class LogInteraction extends JPanel {
 		logEntryForm.add(label_2, "2, 6, right, default");
 		
 		textDateOn = new JFormattedTextField(dateFormatterFactory);
-		logEntryForm.add(textDateOn, "4, 6, fill, default");
+		textDateOn.setValue(Calendar.getInstance(TimeZone.getTimeZone("UTC")).getTime());
+
+		JButton btnCalendar = new JButton("\uD83D\uDCC5"); // 📅 calendar emoji
+		btnCalendar.setFont(btnCalendar.getFont().deriveFont(11f));
+		btnCalendar.setMargin(new java.awt.Insets(1, 4, 1, 4));
+		btnCalendar.setToolTipText("Pick a date from the calendar");
+		btnCalendar.addActionListener(e -> {
+			Object val = textDateOn.getValue();
+			Date current = (val instanceof Date) ? (Date) val : null;
+			DatePickerDialog picker = new DatePickerDialog(
+					LogInteraction.this.getMainWin(), current);
+			picker.setVisible(true);
+			Date picked = picker.getSelectedDate();
+			if (picked != null) {
+				textDateOn.setValue(picked);
+			}
+		});
+
+		JPanel dateFieldPanel = new JPanel(new BorderLayout(2, 0));
+		dateFieldPanel.add(textDateOn, BorderLayout.CENTER);
+		dateFieldPanel.add(btnCalendar, BorderLayout.EAST);
+		logEntryForm.add(dateFieldPanel, "4, 6, fill, default");
 		
 		lblTime = new JLabel("Time");
 		lblTime.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -379,19 +402,53 @@ public class LogInteraction extends JPanel {
 		textDescription = new JTextArea();
 		textDescription.setRows(2);
 		scrollPane.setViewportView(textDescription);
-		
+
+		// TX Location buttons — created here so they can be added to the form below
+		btnLocation = new JButton("Location\u2026");
+		btnLocation.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				LocationEditor le = new LocationEditor(LogInteraction.this.getMainWin());
+				le.setLogInteraction(LogInteraction.this);
+				setLocEditor(le);
+				getLocEditor().setVisible(true);
+			}
+		});
+
+		btnRemoveLocation = new JButton("Remove Location");
+		btnRemoveLocation.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				LogInteraction.this.getEditLocationPanel().unsetLocation();
+			}
+		});
+		btnRemoveLocation.setEnabled(false);
+
+		// TX Location row (row 12)
+		JLabel lblTxLocation = new JLabel("TX Location");
+		lblTxLocation.setFont(new Font("Tahoma", Font.BOLD, 12));
+		logEntryForm.add(lblTxLocation, "2, 12, right, top");
+
+		editLocationPanel = new EditLocationPanel((Location) null);
+		logEntryForm.add(editLocationPanel, "4, 12, fill, fill");
+
+		// TX Location action buttons (row 14)
+		JPanel txBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		txBtnPanel.add(btnLocation);
+		txBtnPanel.add(btnRemoveLocation);
+		logEntryForm.add(txBtnPanel, "4, 14");
+
+		// My Location (RX) rows — shifted to 16/18/20
 		label_4 = new JLabel("My Location");
 		label_4.setFont(new Font("Tahoma", Font.BOLD, 12));
-		logEntryForm.add(label_4, "2, 12, right, default");
-		
+		logEntryForm.add(label_4, "2, 16, right, default");
+
 		lblPlaceName = new JLabel("Place name");
 		lblPlaceName.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		logEntryForm.add(lblPlaceName, "4, 12");
-		
+		logEntryForm.add(lblPlaceName, "4, 16");
+
 		lblRxCoordinates = new JLabel("Coordinates");
 		lblRxCoordinates.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		logEntryForm.add(lblRxCoordinates, "4, 14");
-		
+		logEntryForm.add(lblRxCoordinates, "4, 18");
+
 		saveLogBtn = new JButton("Save");
 		saveLogBtn.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -418,7 +475,7 @@ public class LogInteraction extends JPanel {
 			}
 		});
 		btnChangeLocation.setToolTipText("Select your reception (RX) location for this log entry");
-		logEntryForm.add(btnChangeLocation, "4, 16, left, default");
+		logEntryForm.add(btnChangeLocation, "4, 20, left, default");
 
 		btnCancelLogEntry = new JButton("Cancel");
 		btnCancelLogEntry.addActionListener(new ActionListener() {
@@ -431,29 +488,7 @@ public class LogInteraction extends JPanel {
 		JPanel actionBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 		actionBtnPanel.add(saveLogBtn);
 		actionBtnPanel.add(btnCancelLogEntry);
-		logEntryForm.add(actionBtnPanel, "4, 18");
-		
-		btnLocation = new JButton("Location...");
-		btnLocation.addActionListener(new ActionListener() {
-
-			public void actionPerformed(ActionEvent e) {
-				LocationEditor le = new LocationEditor(LogInteraction.this.getMainWin());
-				le.setLogInteraction(LogInteraction.this);
-				setLocEditor(le);
-				getLocEditor().setVisible(true);
-			}
-
-		});
-
-		btnRemoveLocation = new JButton("Remove Location");
-		btnRemoveLocation.addActionListener(new ActionListener() {
-
-			public void actionPerformed(ActionEvent e) {
-				LogInteraction.this.getEditLocationPanel().unsetLocation();
-			}
-
-		});
-		btnRemoveLocation.setEnabled(false);
+		logEntryForm.add(actionBtnPanel, "4, 22");
 		
 		locationsPanel = new JPanel();
 		tabbedPane.addTab("Locations", null, locationsPanel, null);
@@ -541,7 +576,10 @@ public class LogInteraction extends JPanel {
 			int timestamp = Utilities.stringToUnixTimeStamp(dateStr, "MM/dd/yyyy HH:mm");
 			log.setDateOn(timestamp);
 			log.setDescription(getTextDescription().getText());
-			
+
+			Location txLoc = editLocationPanel.getCurrentLocation();
+			log.setLocation(txLoc != null ? txLoc.getId() : 0);
+
 			if (this.selectedMyPlace != null) {
 				log.setMyPlace(this.selectedMyPlace.getId());
 			} else {
@@ -575,6 +613,9 @@ public class LogInteraction extends JPanel {
 			int timestamp = Utilities.stringToUnixTimeStamp(dateStr, "MM/dd/yyyy HH:mm");
 			log.setDateOn(timestamp);
 			log.setDescription(textDescription.getText());
+			if (editLocationPanel.getCurrentLocation() != null) {
+				log.setLocation(editLocationPanel.getCurrentLocation().getId());
+			}
 			if (this.selectedMyPlace != null) {
 				log.setMyPlace(this.selectedMyPlace.getId());
 			} else {
