@@ -24,26 +24,12 @@ jobs:
         id: pom_version
         run: echo "version=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)" >> $GITHUB_OUTPUT
 
-      - name: Strip SNAPSHOT for release builds
-        id: release_version
-        run: |
-          VERSION="${{ steps.pom_version.outputs.version }}"
-          if [[ "$VERSION" == *"-SNAPSHOT" ]]; then
-            TAG="${{ github.ref_name }}"
-            echo "version=${TAG#v}" >> $GITHUB_OUTPUT
-          else
-            echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Set release version in pom.xml
-        run: mvn versions:set -DnewVersion=${{ steps.release_version.outputs.version }} -DgenerateBackupPoms=false
-
       - name: Build with Maven
         run: mvn -B package --no-transfer-progress -DskipTests
 
       - name: Upload jar to release
         uses: softprops/action-gh-release@v2
         with:
-          files: target/logbook-${{ steps.release_version.outputs.version }}.jar
+          files: target/logbook-${{ steps.pom_version.outputs.version }}.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
