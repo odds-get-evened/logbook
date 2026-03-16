@@ -23,6 +23,29 @@ public class Place {
 		
 	}
 	
+	public static boolean isUsedInLogs(int id) {
+		Connection db = Data.getConnection();
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		try {
+			ps = db.prepareStatement(
+				"SELECT COUNT(*) FROM logs WHERE location = ? OR my_place = ?");
+			ps.setInt(1, id);
+			ps.setInt(2, id);
+			rs = ps.executeQuery();
+			if (rs.next()) {
+				return rs.getInt(1) > 0;
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			try { if (rs != null) rs.close(); } catch (SQLException e) { e.printStackTrace(); }
+			try { if (ps != null) ps.close(); } catch (SQLException e) { e.printStackTrace(); }
+			try { db.close(); } catch (SQLException e) { e.printStackTrace(); }
+		}
+		return false;
+	}
+
 	public static void delete(int id) {
 		Connection db = Data.getConnection();
 		PreparedStatement ps = null;

@@ -5,8 +5,6 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
-import java.awt.SystemColor;
-
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.border.CompoundBorder;
@@ -30,7 +28,6 @@ public class ViewLocationPanel extends JPanel {
 
 		JPanel detailsPanel = new JPanel();
 		detailsPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		detailsPanel.setBackground(SystemColor.info);
 		add(detailsPanel, BorderLayout.CENTER);
 		GridBagLayout gbl = new GridBagLayout();
 		gbl.columnWidths = new int[]{0, 0};

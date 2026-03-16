@@ -12,6 +12,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JTable;
+import javax.swing.UIManager;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
@@ -44,14 +45,12 @@ public class LogsTable extends JTable {
 	
 	public Component prepareRenderer(TableCellRenderer renderer, int row, int column) {
 		Component returnComp = super.prepareRenderer(renderer, row, column);
-		Color alternateColor = new Color(230, 241, 242);
-		Color white = Color.WHITE;
-		if(!returnComp.getBackground().equals(getSelectionBackground())) {
-			Color bg = (row%2 == 0 ? alternateColor : white);
-			returnComp.setBackground(bg);
-			bg = null;
+		if (!returnComp.getBackground().equals(getSelectionBackground())) {
+			Color base = getBackground();
+			Color alternate = UIManager.getColor("Table.alternateRowColor");
+			if (alternate == null) alternate = base;
+			returnComp.setBackground(row % 2 == 0 ? alternate : base);
 		}
-		
 		return returnComp;
 	}
 
@@ -145,7 +144,7 @@ public class LogsTable extends JTable {
 
 	private void createPopup() {
 		this.setPopup(new JPopupMenu());
-		
+
 		JMenuItem editMenuItem = new JMenuItem("Edit");
 		editMenuItem.addActionListener(new ActionListener() {
 
@@ -155,25 +154,39 @@ public class LogsTable extends JTable {
 				LogsTable.this.getLogInteraction().fillForm(log);
 				LogsTable.this.getLogInteraction().getTabbedPane().setSelectedIndex(1);
 			}
-			
+
 		});
-		
+
+		JMenuItem zoomMenuItem = new JMenuItem("Zoom to Bounds");
+		zoomMenuItem.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				Log log = LogsTable.this.getSelectedLog();
+				if (log != null && LogsTable.this.getMapPanel() != null) {
+					LogsTable.this.getMapPanel().zoomToLogBounds(log);
+				}
+			}
+
+		});
+
 		JMenuItem deleteMenuItem = new JMenuItem("Delete");
 		deleteMenuItem.addActionListener(new ActionListener() {
 
 			@Override
 			public void actionPerformed(ActionEvent e) {
 				int confirmed = JOptionPane.showConfirmDialog(SwingUtilities.getWindowAncestor(LogsTable.this), "Are you sure you want to delete this log entry?", "Confirm delete!", JOptionPane.YES_NO_OPTION);
-				
+
 				if(confirmed == JOptionPane.YES_OPTION) {
 					LogsModel lm = (LogsModel) LogsTable.this.getModel();
 					lm.delete(LogsTable.this.getSelectedLog());
 				}
 			}
-			
+
 		});
-		
+
 		this.getPopup().add(editMenuItem);
+		this.getPopup().add(zoomMenuItem);
 		this.getPopup().add(deleteMenuItem);
 	}
 
