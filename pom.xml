@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.qualsh</groupId>
 	<artifactId>logbook</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.1</version>
 	<name>Logbook</name>
 
 	<properties>
@@ -52,7 +52,7 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
-							<finalName>logbook</finalName>
+							<finalName>logbook-${project.version}</finalName>
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>org.qualsh.lb.App</mainClass>
