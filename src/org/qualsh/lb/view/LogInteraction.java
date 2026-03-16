@@ -95,6 +95,7 @@ public class LogInteraction extends JPanel {
 	private JButton btnChangeLocation;
 	private JScrollPane scrollPane;
 	private EditLocationPanel editLocationPanel;
+	private JPanel formErrorPanel;
 	
 	public LogInteraction() {
 		setLayout(new BorderLayout(0, 0));
@@ -300,7 +301,14 @@ public class LogInteraction extends JPanel {
 		logEntryPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
 		tabbedPane.addTab("Entry", null, logEntryPanel, null);
 		logEntryPanel.setLayout(new BorderLayout(0, 0));
-		
+
+		formErrorPanel = new JPanel();
+		formErrorPanel.setLayout(new GridBagLayout());
+		formErrorPanel.setBackground(new Color(255, 230, 230));
+		formErrorPanel.setBorder(new EmptyBorder(4, 6, 4, 6));
+		formErrorPanel.setVisible(false);
+		logEntryPanel.add(formErrorPanel, BorderLayout.NORTH);
+
 		logEntryForm = new JPanel();
 		logEntryPanel.add(logEntryForm, BorderLayout.CENTER);
 		logEntryForm.setLayout(new FormLayout(new ColumnSpec[] {
@@ -556,16 +564,12 @@ public class LogInteraction extends JPanel {
 			}
 			
 			lm.update(log);
-			
+
+			formErrorPanel.setVisible(false);
 			resetEntry();
-			
 			setCurrentLog(null);
-		} else {			
-			for(FormError fe : errors) {
-				JLabel errLabel = new JLabel(fe.getMessage());
-				errLabel.setFont(new Font("Tahoma", Font.BOLD, 11));
-				errLabel.setForeground(Color.RED);
-			}
+		} else {
+			showFormErrors(errors);
 		}
 	}
 	
@@ -591,17 +595,32 @@ public class LogInteraction extends JPanel {
 			}
 			
 			lm.insert(log);
-			
+
+			formErrorPanel.setVisible(false);
 			resetEntry();
 		} else {
-			for(FormError fe : errors) {
-				JLabel errLabel = new JLabel(fe.getMessage());
-				errLabel.setFont(new Font("Tahoma", Font.BOLD, 11));
-				errLabel.setForeground(Color.RED);
-			}
+			showFormErrors(errors);
 		}
 	}
 	
+	private void showFormErrors(java.util.ArrayList<FormError> errors) {
+		formErrorPanel.removeAll();
+		GridBagConstraints ec = new GridBagConstraints();
+		ec.gridx = 0;
+		ec.gridy = GridBagConstraints.RELATIVE;
+		ec.anchor = GridBagConstraints.WEST;
+		ec.insets = new Insets(1, 0, 1, 0);
+		for (FormError fe : errors) {
+			JLabel errLabel = new JLabel("⚠ " + fe.getMessage());
+			errLabel.setFont(new Font("Tahoma", Font.BOLD, 11));
+			errLabel.setForeground(new Color(160, 0, 0));
+			formErrorPanel.add(errLabel, ec);
+		}
+		formErrorPanel.setVisible(true);
+		formErrorPanel.revalidate();
+		formErrorPanel.repaint();
+	}
+
 	public void resetEntry() {
 		getTextDateOn().setValue(Calendar.getInstance(TimeZone.getTimeZone("UTC")).getTime());
 		getTextTimeOn().getoTimer().start();
@@ -609,6 +628,10 @@ public class LogInteraction extends JPanel {
 		getTextFrequency().setText("");
 		getComboModes().setSelectedIndex(0);
 		this.getEditLocationPanel().unsetLocation();
+		if (formErrorPanel != null) {
+			formErrorPanel.removeAll();
+			formErrorPanel.setVisible(false);
+		}
 	}
 
 	public LogInteraction(LayoutManager layout) {

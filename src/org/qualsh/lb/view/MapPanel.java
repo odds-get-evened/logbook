@@ -219,6 +219,15 @@ public class MapPanel extends JPanel {
     }
 
     /**
+     * Pan the map to the given coordinates without changing existing markers.
+     * Useful for previewing a station or place location.
+     */
+    public void panToLocation(double lat, double lon) {
+        mapViewer.setAddressLocation(new GeoPosition(lat, lon));
+        mapViewer.setZoom(5);
+    }
+
+    /**
      * Enable or disable location-picking mode.
      * While active the cursor changes to a crosshair and each click fires the callback.
      */
