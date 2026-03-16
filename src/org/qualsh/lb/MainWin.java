@@ -26,6 +26,8 @@ import javax.swing.UnsupportedLookAndFeelException;
 
 import org.qualsh.lb.data.Data;
 import org.qualsh.lb.data.LogsModel;
+import org.qualsh.lb.data.ViewLocationsModel;
+import org.qualsh.lb.data.ViewPlacesModel;
 import org.qualsh.lb.util.Debugger;
 import org.qualsh.lb.view.LogInteraction;
 import org.qualsh.lb.view.LogMenuBar;
@@ -113,7 +115,7 @@ public class MainWin extends JFrame {
 
 		// Split left panel: logs table on top, map below
 		JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logsPanel, mapPanel);
-		leftSplit.setResizeWeight(0.5);   // give equal initial space to each half
+		leftSplit.setResizeWeight(0.67);  // logs table gets ~2/3, map gets ~1/3
 		leftSplit.setBorder(null);
 		leftPanel.add(leftSplit, BorderLayout.CENTER);
 
@@ -135,6 +137,13 @@ public class MainWin extends JFrame {
 		LogsModel logsModel = (LogsModel) logsPanel.getLogsTable().getModel();
 		mapPanel.plotLogs(logsModel.getData());
 		logsModel.addTableModelListener(e -> mapPanel.plotLogs(logsModel.getData()));
+
+		// Load all locations/places from DB for the "All Stations" layer
+		ViewLocationsModel allLocModel = new ViewLocationsModel();
+		allLocModel.setAllLocations();
+		ViewPlacesModel allPlacesModel = new ViewPlacesModel();
+		allPlacesModel.setAllPlaces();
+		mapPanel.plotAllLocations(allLocModel.getData(), allPlacesModel.getData());
 
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
 
