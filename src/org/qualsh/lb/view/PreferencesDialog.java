@@ -7,38 +7,38 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Toolkit;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
-import java.io.IOException;
-import java.net.MalformedURLException;
-
-import javax.swing.JButton;
-import javax.swing.JDialog;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JTextField;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
-import javax.swing.border.CompoundBorder;
-import javax.swing.border.EmptyBorder;
-import javax.swing.border.EtchedBorder;
-import javax.swing.border.TitledBorder;
-
-import org.jxmapviewer.viewer.GeoPosition;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.EtchedBorder;
+import javax.swing.border.TitledBorder;
+
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.jxmapviewer.viewer.GeoPosition;
 import org.qualsh.lb.MainWin;
-import org.qualsh.lb.view.MapPanel;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Preferences;
 import org.qualsh.lb.view.field.CoordinateTextField;
@@ -46,6 +46,23 @@ import org.qualsh.lb.view.field.CoordinateTextField;
 public class PreferencesDialog extends JDialog {
 
 	private static final long serialVersionUID = -3263330177361727514L;
+
+	private static final String[] THEME_NAMES = {
+		"System Default",
+		"Flat Light",
+		"Flat Dark",
+		"Flat IntelliJ",
+		"Flat Darcula"
+	};
+
+	private static final String[] THEME_CLASSES = {
+		"system",
+		"com.formdev.flatlaf.FlatLightLaf",
+		"com.formdev.flatlaf.FlatDarkLaf",
+		"com.formdev.flatlaf.FlatIntelliJLaf",
+		"com.formdev.flatlaf.FlatDarculaLaf"
+	};
+
 	private CoordinateTextField textLatitude;
 	private CoordinateTextField textLongitude;
 	private JButton btnSave;
@@ -55,48 +72,50 @@ public class PreferencesDialog extends JDialog {
 	private JLabel lblCurrentLocation;
 	private JButton btnReset;
 	private LogInteraction logInteraction;
+	private JComboBox<String> themeComboBox;
 
 	public PreferencesDialog(JFrame frame) {
 		super(frame);
-		
-		this.setMinimumSize(new Dimension(400, 300));
+
+		this.setMinimumSize(new Dimension(420, 320));
 		this.setTitle("Preferences");
 		this.setModal(true);
-		
+
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 		int winW = (int) (screenSize.getWidth() * 0.3);
-		int winH = (int) (screenSize.getHeight() * 0.25);
+		int winH = (int) (screenSize.getHeight() * 0.3);
 		setSize(winW, winH);
-		
+
 		int winX = (int) ((screenSize.getWidth() - getSize().getWidth()) / 2);
 		int winY = (int) ((screenSize.getHeight() - getSize().getHeight()) / 2);
 		setLocation(winX, winY);
-		
-		JPanel panel = new JPanel();
-		panel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		getContentPane().add(panel, BorderLayout.CENTER);
-		GridBagLayout gbl_panel = new GridBagLayout();
-		gbl_panel.columnWidths = new int[]{0, 0};
-		gbl_panel.rowHeights = new int[]{0, 0, 0};
-		gbl_panel.columnWeights = new double[]{1.0, Double.MIN_VALUE};
-		gbl_panel.rowWeights = new double[]{1.0, 0.0, Double.MIN_VALUE};
-		panel.setLayout(gbl_panel);
-		
+
+		JPanel outerPanel = new JPanel(new BorderLayout(0, 5));
+		outerPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+		getContentPane().add(outerPanel, BorderLayout.CENTER);
+
+		// Tabbed pane
+		JTabbedPane tabbedPane = new JTabbedPane();
+		outerPanel.add(tabbedPane, BorderLayout.CENTER);
+
+		// ── Tab 1: Location ──────────────────────────────────────────────────
+		JPanel locationTab = new JPanel(new BorderLayout());
+		tabbedPane.addTab("Location", locationTab);
+
 		JPanel panel_1 = new JPanel();
-		panel_1.setBorder(new CompoundBorder(new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null), "Your Location", TitledBorder.LEADING, TitledBorder.TOP, null, null), new EmptyBorder(5, 5, 5, 5)));
-		GridBagConstraints gbc_panel_1 = new GridBagConstraints();
-		gbc_panel_1.insets = new Insets(0, 0, 5, 0);
-		gbc_panel_1.fill = GridBagConstraints.BOTH;
-		gbc_panel_1.gridx = 0;
-		gbc_panel_1.gridy = 0;
-		panel.add(panel_1, gbc_panel_1);
+		panel_1.setBorder(new CompoundBorder(
+				new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null),
+						"Your Location", TitledBorder.LEADING, TitledBorder.TOP, null, null),
+				new EmptyBorder(5, 5, 5, 5)));
+		locationTab.add(panel_1, BorderLayout.CENTER);
+
 		GridBagLayout gbl_panel_1 = new GridBagLayout();
 		gbl_panel_1.columnWidths = new int[]{0, 0, 0};
 		gbl_panel_1.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0};
 		gbl_panel_1.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
 		gbl_panel_1.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
 		panel_1.setLayout(gbl_panel_1);
-		
+
 		JLabel lblCurrentLocation_1 = new JLabel("Current location");
 		lblCurrentLocation_1.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblCurrentLocation_1 = new GridBagConstraints();
@@ -104,7 +123,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblCurrentLocation_1.gridx = 0;
 		gbc_lblCurrentLocation_1.gridy = 0;
 		panel_1.add(lblCurrentLocation_1, gbc_lblCurrentLocation_1);
-		
+
 		lblCurrentLocation = new JLabel("No location set.");
 		GridBagConstraints gbc_lblCurrentLocation = new GridBagConstraints();
 		gbc_lblCurrentLocation.anchor = GridBagConstraints.WEST;
@@ -112,7 +131,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblCurrentLocation.gridx = 1;
 		gbc_lblCurrentLocation.gridy = 0;
 		panel_1.add(lblCurrentLocation, gbc_lblCurrentLocation);
-		
+
 		JLabel lblFindLocation = new JLabel("Find location");
 		lblFindLocation.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblFindLocation = new GridBagConstraints();
@@ -120,7 +139,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblFindLocation.gridx = 0;
 		gbc_lblFindLocation.gridy = 1;
 		panel_1.add(lblFindLocation, gbc_lblFindLocation);
-		
+
 		JPanel panel_4 = new JPanel();
 		GridBagConstraints gbc_panel_4 = new GridBagConstraints();
 		gbc_panel_4.insets = new Insets(0, 0, 5, 0);
@@ -134,7 +153,7 @@ public class PreferencesDialog extends JDialog {
 		gbl_panel_4.columnWeights = new double[]{1.0, 0.0, Double.MIN_VALUE};
 		gbl_panel_4.rowWeights = new double[]{0.0, Double.MIN_VALUE};
 		panel_4.setLayout(gbl_panel_4);
-		
+
 		textFindLocation = new JTextField();
 		GridBagConstraints gbc_textFindLocation = new GridBagConstraints();
 		gbc_textFindLocation.insets = new Insets(0, 0, 0, 5);
@@ -143,10 +162,9 @@ public class PreferencesDialog extends JDialog {
 		gbc_textFindLocation.gridy = 0;
 		panel_4.add(textFindLocation, gbc_textFindLocation);
 		textFindLocation.setColumns(10);
-		
+
 		btnFindLocation = new JButton("Find");
 		btnFindLocation.addActionListener(new ActionListener() {
-
 			public void actionPerformed(ActionEvent e) {
 				String q = PreferencesDialog.this.getTextFindLocation().getText().trim();
 				if (q.isEmpty()) return;
@@ -161,7 +179,7 @@ public class PreferencesDialog extends JDialog {
 						HttpResponse<String> resp = client.send(req, HttpResponse.BodyHandlers.ofString());
 						JSONArray results = (JSONArray) new JSONParser().parse(resp.body());
 						if (results == null || results.isEmpty()) {
-							javax.swing.SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("No results found"));
+							SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("No results found"));
 							return;
 						}
 						JSONObject first = (JSONObject) results.get(0);
@@ -169,23 +187,22 @@ public class PreferencesDialog extends JDialog {
 						String lon = String.format("%.5f", Double.parseDouble((String) first.get("lon")));
 						String name = (String) first.get("display_name");
 						String shortName = name != null ? name.split(",")[0] : "Found";
-						javax.swing.SwingUtilities.invokeLater(() -> {
+						SwingUtilities.invokeLater(() -> {
 							PreferencesDialog.this.getTextLatitude().setText(lat);
 							PreferencesDialog.this.getTextLongitude().setText(lon);
 							PreferencesDialog.this.getLblCurrentLocation().setText(shortName);
 						});
 					} catch (Exception ex) {
-						javax.swing.SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("Search failed"));
+						SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("Search failed"));
 					}
 				}, "PrefDlg-geocode").start();
 			}
-			
 		});
 		GridBagConstraints gbc_btnFindLocation = new GridBagConstraints();
 		gbc_btnFindLocation.gridx = 1;
 		gbc_btnFindLocation.gridy = 0;
 		panel_4.add(btnFindLocation, gbc_btnFindLocation);
-		
+
 		JLabel lblLatitude = new JLabel("Latitude");
 		lblLatitude.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblLatitude = new GridBagConstraints();
@@ -193,7 +210,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblLatitude.gridx = 0;
 		gbc_lblLatitude.gridy = 2;
 		panel_1.add(lblLatitude, gbc_lblLatitude);
-		
+
 		textLatitude = new CoordinateTextField();
 		GridBagConstraints gbc_textLatitude = new GridBagConstraints();
 		gbc_textLatitude.fill = GridBagConstraints.HORIZONTAL;
@@ -201,7 +218,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_textLatitude.gridx = 1;
 		gbc_textLatitude.gridy = 2;
 		panel_1.add(textLatitude, gbc_textLatitude);
-		
+
 		JLabel lblLongitude = new JLabel("Longitude");
 		lblLongitude.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblLongitude = new GridBagConstraints();
@@ -209,7 +226,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblLongitude.gridx = 0;
 		gbc_lblLongitude.gridy = 3;
 		panel_1.add(lblLongitude, gbc_lblLongitude);
-		
+
 		textLongitude = new CoordinateTextField();
 		GridBagConstraints gbc_textLongitude = new GridBagConstraints();
 		gbc_textLongitude.insets = new Insets(0, 0, 5, 0);
@@ -217,7 +234,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_textLongitude.gridx = 1;
 		gbc_textLongitude.gridy = 3;
 		panel_1.add(textLongitude, gbc_textLongitude);
-		
+
 		// Pick from map button
 		JButton btnPickFromMap = new JButton("Pick from Map");
 		btnPickFromMap.setToolTipText("Click on the map to set your RX location");
@@ -237,7 +254,7 @@ public class PreferencesDialog extends JDialog {
 						mp.setPickingMode(false, null);
 						String lat = String.format("%.5f", pos.getLatitude());
 						String lon = String.format("%.5f", pos.getLongitude());
-						javax.swing.SwingUtilities.invokeLater(() -> {
+						SwingUtilities.invokeLater(() -> {
 							PreferencesDialog.this.getTextLatitude().setText(lat);
 							PreferencesDialog.this.getTextLongitude().setText(lon);
 							PreferencesDialog.this.getLblCurrentLocation().setText(lat + ", " + lon);
@@ -251,78 +268,108 @@ public class PreferencesDialog extends JDialog {
 		// reset user's location preference
 		btnReset = new JButton("Reset");
 		btnReset.addActionListener(new ActionListener() {
-
 			public void actionPerformed(ActionEvent e) {
 				Preferences.remove(Preferences.PREF_NAME_MY_PLACE);
-				
 				PreferencesDialog.this.getLblCurrentLocation().setText("No location set.");
 				PreferencesDialog.this.getTextFindLocation().setText("");
 				PreferencesDialog.this.getTextLatitude().setText("");
 				PreferencesDialog.this.getTextLongitude().setText("");
 			}
-			
 		});
 		GridBagConstraints gbc_btnReset = new GridBagConstraints();
 		gbc_btnReset.anchor = GridBagConstraints.EAST;
 		gbc_btnReset.gridx = 1;
 		gbc_btnReset.gridy = 5;
 		panel_1.add(btnReset, gbc_btnReset);
-		
+
+		// ── Tab 2: Appearance ─────────────────────────────────────────────────
+		JPanel appearanceTab = new JPanel(new BorderLayout());
+		tabbedPane.addTab("Appearance", appearanceTab);
+
+		JPanel themePanel = new JPanel();
+		themePanel.setBorder(new CompoundBorder(
+				new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null),
+						"UI Look & Feel", TitledBorder.LEADING, TitledBorder.TOP, null, null),
+				new EmptyBorder(10, 10, 10, 10)));
+		appearanceTab.add(themePanel, BorderLayout.NORTH);
+
+		GridBagLayout gbl_themePanel = new GridBagLayout();
+		gbl_themePanel.columnWidths = new int[]{0, 0, 0};
+		gbl_themePanel.rowHeights = new int[]{0, 0, 0};
+		gbl_themePanel.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
+		gbl_themePanel.rowWeights = new double[]{0.0, 0.0, Double.MIN_VALUE};
+		themePanel.setLayout(gbl_themePanel);
+
+		JLabel lblTheme = new JLabel("Theme");
+		lblTheme.setFont(new Font("Tahoma", Font.BOLD, 11));
+		GridBagConstraints gbc_lblTheme = new GridBagConstraints();
+		gbc_lblTheme.insets = new Insets(0, 0, 8, 10);
+		gbc_lblTheme.gridx = 0;
+		gbc_lblTheme.gridy = 0;
+		themePanel.add(lblTheme, gbc_lblTheme);
+
+		themeComboBox = new JComboBox<>(THEME_NAMES);
+		GridBagConstraints gbc_themeComboBox = new GridBagConstraints();
+		gbc_themeComboBox.fill = GridBagConstraints.HORIZONTAL;
+		gbc_themeComboBox.insets = new Insets(0, 0, 8, 0);
+		gbc_themeComboBox.gridx = 1;
+		gbc_themeComboBox.gridy = 0;
+		themePanel.add(themeComboBox, gbc_themeComboBox);
+
+		JLabel lblThemeNote = new JLabel("Theme changes apply immediately when saved.");
+		lblThemeNote.setFont(new Font("Tahoma", Font.ITALIC, 10));
+		GridBagConstraints gbc_lblThemeNote = new GridBagConstraints();
+		gbc_lblThemeNote.anchor = GridBagConstraints.WEST;
+		gbc_lblThemeNote.gridwidth = 2;
+		gbc_lblThemeNote.gridx = 0;
+		gbc_lblThemeNote.gridy = 1;
+		themePanel.add(lblThemeNote, gbc_lblThemeNote);
+
+		// ── Save / Cancel buttons (shared across tabs) ────────────────────────
 		JPanel panel_3 = new JPanel();
-		GridBagConstraints gbc_panel_3 = new GridBagConstraints();
-		gbc_panel_3.anchor = GridBagConstraints.EAST;
-		gbc_panel_3.fill = GridBagConstraints.VERTICAL;
-		gbc_panel_3.gridx = 0;
-		gbc_panel_3.gridy = 1;
-		panel.add(panel_3, gbc_panel_3);
-		
+		outerPanel.add(panel_3, BorderLayout.SOUTH);
+
 		btnSave = new JButton("Save");
 		this.getBtnSave().addActionListener(new ActionListener() {
-
 			public void actionPerformed(ActionEvent e) {
 				PreferencesDialog.this.save();
-				
 				PreferencesDialog.this.setVisible(false);
 			}
-			
 		});
 		panel_3.add(btnSave);
-		
+
 		btnCancel = new JButton("Cancel");
 		this.getBtnCancel().addActionListener(new ActionListener() {
-
 			public void actionPerformed(ActionEvent e) {
 				PreferencesDialog.this.setVisible(false);
 			}
-			
 		});
 		panel_3.add(btnCancel);
-		
-		try {
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		} catch (ClassNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (InstantiationException e1) {
-			e1.printStackTrace();
-		} catch (IllegalAccessException e1) {
-			e1.printStackTrace();
-		} catch (UnsupportedLookAndFeelException e1) {
-			e1.printStackTrace();
-		}
-		
+
 		this.addWindowListener(new WindowListener() {
 
 			public void windowOpened(WindowEvent e) {
 				System.out.println("Preferences dialog opened");
 				String pref = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
 				System.out.println("Preferences dialog was opened; User preferences; my_place ID: " + pref);
-				if(pref != null) {
+				if (pref != null) {
 					int placeId = Integer.parseInt(pref);
 					Place place = Place.getOne(placeId);
-					
 					PreferencesDialog.this.getLblCurrentLocation().setText(place.getPlaceName());
 					PreferencesDialog.this.getTextLatitude().setText(place.getLatitude());
 					PreferencesDialog.this.getTextLongitude().setText(place.getLongitude());
+				}
+				// Initialize theme combo to saved value
+				String savedTheme = Preferences.getOne(Preferences.PREF_NAME_THEME);
+				if (savedTheme != null) {
+					for (int i = 0; i < THEME_CLASSES.length; i++) {
+						if (THEME_CLASSES[i].equals(savedTheme)) {
+							themeComboBox.setSelectedIndex(i);
+							break;
+						}
+					}
+				} else {
+					themeComboBox.setSelectedIndex(0); // System Default
 				}
 			}
 
@@ -350,10 +397,9 @@ public class PreferencesDialog extends JDialog {
 				System.out.println("Preferences dialog deactivated");
 				String pref = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
 				System.out.println("Preferences dialog is closing; User preferences; my_place ID: " + pref);
-				if(pref != null) {
+				if (pref != null) {
 					int placeId = Integer.parseInt(pref);
 					Place place = Place.getOne(placeId);
-					
 					PreferencesDialog.this.getLogInteraction().getLblPlaceName().setText(place.getPlaceName());
 					PreferencesDialog.this.getLogInteraction().getLblRxCoordinates().setText(place.getLatitude() + ", " + place.getLongitude());
 				} else {
@@ -361,20 +407,21 @@ public class PreferencesDialog extends JDialog {
 					PreferencesDialog.this.getLogInteraction().getLblRxCoordinates().setText("");
 				}
 			}
-			
+
 		});
 	}
 
 	protected void save() {
 		this.saveMyPlace();
+		this.saveTheme();
 		if (logInteraction != null) {
 			logInteraction.getLocationsTab().refreshList();
 		}
 	}
 
 	private void saveMyPlace() {
-		if(!this.getTextLatitude().getText().isEmpty() && 
-				!this.getTextLongitude().getText().isEmpty()) { // only set place if coordinates are present
+		if (!this.getTextLatitude().getText().isEmpty() &&
+				!this.getTextLongitude().getText().isEmpty()) {
 			Place place = new Place();
 			place.setLatitude(this.getTextLatitude().getText());
 			place.setLongitude(this.getTextLongitude().getText());
@@ -382,6 +429,24 @@ public class PreferencesDialog extends JDialog {
 			int placeId = place.insert();
 			place.setId(placeId);
 			Preferences.saveMyPlace(place);
+		}
+	}
+
+	private void saveTheme() {
+		int idx = themeComboBox.getSelectedIndex();
+		String themeClass = THEME_CLASSES[idx];
+		Preferences.save(Preferences.PREF_NAME_THEME, themeClass);
+		try {
+			if ("system".equals(themeClass)) {
+				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+			} else {
+				UIManager.setLookAndFeel(themeClass);
+			}
+			for (Window w : Window.getWindows()) {
+				SwingUtilities.updateComponentTreeUI(w);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	}
 
