@@ -563,13 +563,7 @@ public class NewLocationDialog extends JDialog {
 	}
 
 	private void updateLists() {
-		MainWin mainWin = (MainWin) this.getOwner();
-		ViewStationsModel stnModel = (ViewStationsModel) mainWin.getLogInteraction().getLocationsTab().getStationList().getModel();
-		ViewLocationsModel locsModel = (ViewLocationsModel) mainWin.getLogInteraction().getLocationsTab().getLocationList().getModel();
-		stnModel.setAllStations();
-		locsModel.setAllLocations();
-		mainWin.getLogInteraction().getLocationsTab().getStationList().updateUI();
-		mainWin.getLogInteraction().getLocationsTab().getLocationList().updateUI();
+		// LocationsTab now manages user station locations (places); no station/location list to refresh here.
 	}
 
 	private void resetFields() {

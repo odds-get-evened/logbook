@@ -189,9 +189,6 @@ public class NewStationDialog extends JDialog {
 			
 			this.reset();
 			this.setVisible(false);
-			ViewStationsModel stationsModel = (ViewStationsModel) getLogInteraction().getLocationsTab().getStationList().getModel();
-			stationsModel.setAllStations();
-			this.getLogInteraction().getLocationsTab().getStationList().updateUI();
 		} else {
 			getErrorPanel().setVisible(true);
 			for(FormError fe : errors) {

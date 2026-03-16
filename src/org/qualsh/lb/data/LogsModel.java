@@ -234,6 +234,52 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		return logList;
 	}
 
+	public ArrayList<Log> getLogsByMyPlace(int id) {
+		ArrayList<Log> logList = new ArrayList<Log>();
+
+		Connection conn = Data.getConnection();
+		PreparedStatement ps = null;
+		ResultSet rs = null;
+		try {
+			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place FROM logs WHERE my_place = ? ORDER BY dateon DESC");
+			ps.setInt(1, id);
+
+			rs = ps.executeQuery();
+
+			while (rs.next()) {
+				Log log = new Log();
+				log.setId(rs.getInt("id"));
+				log.setDateOn(rs.getInt("dateon"));
+				log.setDescription(rs.getString("description"));
+				log.setFrequency(rs.getFloat("freq"));
+				log.setMode(rs.getString("mode"));
+				log.setLocation(rs.getInt("location"));
+				log.setMyPlace(rs.getInt("my_place"));
+				logList.add(log);
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			try {
+				if (rs != null) rs.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			try {
+				if (ps != null) ps.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+
+		return logList;
+	}
+
 	public int getRowCount() {
 		return data.size();
 	}

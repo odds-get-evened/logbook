@@ -96,6 +96,7 @@ public class LogInteraction extends JPanel {
 	private JScrollPane scrollPane;
 	private EditLocationPanel editLocationPanel;
 	private JPanel formErrorPanel;
+	private Place selectedMyPlace = null;
 	
 	public LogInteraction() {
 		setLayout(new BorderLayout(0, 0));
@@ -413,21 +414,21 @@ public class LogInteraction extends JPanel {
 			}
 		});
 		
-		btnChangeLocation = new JButton("Change location");
+		btnChangeLocation = new JButton("My Location\u2026");
 		btnChangeLocation.setFont(new Font("Tahoma", Font.PLAIN, 12));
 		btnChangeLocation.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				LogInteraction.this.getPreferencesDialog().setVisible(true);
+				PlacePickerDialog picker = new PlacePickerDialog(LogInteraction.this.getMainWin());
+				picker.setVisible(true);
+				Place picked = picker.getSelectedPlace();
+				if (picked != null) {
+					LogInteraction.this.selectedMyPlace = picked;
+					LogInteraction.this.getLblPlaceName().setText(picked.getPlaceName());
+					LogInteraction.this.getLblRxCoordinates().setText(picked.getLatitude() + ", " + picked.getLongitude());
+				}
 			}
 		});
-		btnChangeLocation.setVerticalAlignment(SwingConstants.BOTTOM);
-		btnChangeLocation.setToolTipText("Edit your reception (RX) location");
-		btnChangeLocation.setOpaque(false);
-		btnChangeLocation.setForeground(Color.BLUE);
-		btnChangeLocation.setFocusPainted(false);
-		btnChangeLocation.setContentAreaFilled(false);
-		btnChangeLocation.setBorderPainted(false);
-		btnChangeLocation.setBorder(new EmptyBorder(0, 0, 0, 0));
+		btnChangeLocation.setToolTipText("Select your reception (RX) location for this log entry");
 		logEntryForm.add(btnChangeLocation, "4, 16, left, default");
 		logEntryForm.add(saveLogBtn, "2, 18");
 		
@@ -506,6 +507,15 @@ public class LogInteraction extends JPanel {
 		if(log.getLocation() != 0) {
 			this.getEditLocationPanel().setCurrentLocation(log.getFullLocation());
 		}
+
+		if (log.getMyPlace() != 0) {
+			Place place = Place.getOne(log.getMyPlace());
+			if (place != null) {
+				this.selectedMyPlace = place;
+				this.getLblPlaceName().setText(place.getPlaceName());
+				this.getLblRxCoordinates().setText(place.getLatitude() + ", " + place.getLongitude());
+			}
+		}
 	}
 	
 	private ArrayList<FormError> getErrors() {
@@ -553,14 +563,16 @@ public class LogInteraction extends JPanel {
 				System.out.println("Current location ID: has been reset to NULL.");
 				log.setLocation(0);
 			}
-			
-			String myPlaceId = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
-			if(myPlaceId != null) {
-				System.out.println("Current receiving location ID: " + myPlaceId);
-				log.setMyPlace(Integer.parseInt(myPlaceId));
+		
+			if (this.selectedMyPlace != null) {
+				log.setMyPlace(this.selectedMyPlace.getId());
 			} else {
-				System.out.println("Current receiving location ID: has been reset to 0.");
-				log.setMyPlace(0);
+				String myPlaceId = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
+				if (myPlaceId != null) {
+					log.setMyPlace(Integer.parseInt(myPlaceId));
+				} else {
+					log.setMyPlace(0);
+				}
 			}
 			
 			lm.update(log);
@@ -588,12 +600,16 @@ public class LogInteraction extends JPanel {
 			if(this.getEditLocationPanel().getCurrentLocation() != null) {
 				log.setLocation(this.getEditLocationPanel().getCurrentLocation().getId());
 			}
-			
-			String myPlaceId = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
-			if(myPlaceId != null) {
-				log.setMyPlace(Integer.parseInt(myPlaceId));
+
+			if (this.selectedMyPlace != null) {
+				log.setMyPlace(this.selectedMyPlace.getId());
+			} else {
+				String myPlaceId = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
+				if(myPlaceId != null) {
+					log.setMyPlace(Integer.parseInt(myPlaceId));
+				}
 			}
-			
+
 			lm.insert(log);
 
 			formErrorPanel.setVisible(false);
@@ -631,6 +647,22 @@ public class LogInteraction extends JPanel {
 		if (formErrorPanel != null) {
 			formErrorPanel.removeAll();
 			formErrorPanel.setVisible(false);
+		}
+		// Reset per-log place selection; fall back to the global preference display
+		this.selectedMyPlace = null;
+		String prefPlaceId = Preferences.getOne(Preferences.PREF_NAME_MY_PLACE);
+		if (prefPlaceId != null) {
+			Place pref = Place.getOne(Integer.parseInt(prefPlaceId));
+			if (pref != null) {
+				getLblPlaceName().setText(pref.getPlaceName());
+				getLblRxCoordinates().setText(pref.getLatitude() + ", " + pref.getLongitude());
+			} else {
+				getLblPlaceName().setText("No location set.");
+				getLblRxCoordinates().setText("");
+			}
+		} else {
+			getLblPlaceName().setText("No location set.");
+			getLblRxCoordinates().setText("");
 		}
 	}
 
