@@ -367,6 +367,9 @@ public class PreferencesDialog extends JDialog {
 
 	protected void save() {
 		this.saveMyPlace();
+		if (logInteraction != null) {
+			logInteraction.getLocationsTab().refreshList();
+		}
 	}
 
 	private void saveMyPlace() {

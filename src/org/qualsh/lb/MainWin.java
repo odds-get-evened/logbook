@@ -146,6 +146,13 @@ public class MainWin extends JFrame {
 		allPlacesModel.setAllPlaces();
 		mapPanel.plotAllLocations(allLocModel.getData(), allPlacesModel.getData());
 
+		// Re-plot the "All Stations" layer whenever places are added, edited, or deleted
+		this.getLogInteraction().getLocationsTab().setOnPlacesChanged(() -> {
+			ViewPlacesModel pm = new ViewPlacesModel();
+			pm.setAllPlaces();
+			mapPanel.plotAllLocations(allLocModel.getData(), pm.getData());
+		});
+
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
 
 			public boolean dispatchKeyEvent(KeyEvent e) {

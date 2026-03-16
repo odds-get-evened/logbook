@@ -465,6 +465,7 @@ public class LogInteraction extends JPanel {
 		btnChangeLocation.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				PlacePickerDialog picker = new PlacePickerDialog(LogInteraction.this.getMainWin());
+				picker.setOnPlaceCreated(() -> LogInteraction.this.getLocationsTab().refreshList());
 				picker.setVisible(true);
 				Place picked = picker.getSelectedPlace();
 				if (picked != null) {
