@@ -26,13 +26,15 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+
 import javax.swing.BorderFactory;
-import javax.swing.ButtonGroup;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
-import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
@@ -68,8 +70,14 @@ public class MapPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
 
-    /** Which set of waypoints to display. */
-    enum LayerFilter { ALL_LOCATIONS, LOG_ENTRIES }
+    /** Which set of waypoints / overlay to display. */
+    enum LayerFilter { ALL_LOCATIONS, LOG_ENTRIES, MUF_HEATMAP }
+
+    private static final String[] LAYER_OPTIONS = {
+        "All Stations",
+        "Log Entries Only",
+        "MUF Heatmap Overlay"
+    };
 
     private final JXMapViewer mapViewer;
 
@@ -87,6 +95,7 @@ public class MapPanel extends JPanel {
     private final JTextField searchField;
     private final JLabel statusLabel;
     private final JToggleButton btnPick;
+    private final JComboBox<String> layerCombo;
 
     public MapPanel() {
         setLayout(new BorderLayout());
@@ -142,6 +151,7 @@ public class MapPanel extends JPanel {
         btnPick = new JToggleButton("Pick Location");
         statusLabel = new JLabel(" ");
         statusLabel.setForeground(Color.DARK_GRAY);
+        layerCombo = new JComboBox<>(LAYER_OPTIONS);
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0;
@@ -170,21 +180,6 @@ public class MapPanel extends JPanel {
         toolbar.add(statusLabel, gbc);
 
         // ---- layer filter row ----
-        JRadioButton rbAllLocations = new JRadioButton("All Stations", true);
-        JRadioButton rbLogEntries   = new JRadioButton("Log Entries Only");
-        ButtonGroup layerGroup = new ButtonGroup();
-        layerGroup.add(rbAllLocations);
-        layerGroup.add(rbLogEntries);
-
-        rbAllLocations.addActionListener(e -> {
-            activeLayer = LayerFilter.ALL_LOCATIONS;
-            updatePainters();
-        });
-        rbLogEntries.addActionListener(e -> {
-            activeLayer = LayerFilter.LOG_ENTRIES;
-            updatePainters();
-        });
-
         GridBagConstraints gbcL = new GridBagConstraints();
         gbcL.gridy = 1;
         gbcL.insets = new Insets(0, 0, 0, 4);
@@ -194,11 +189,17 @@ public class MapPanel extends JPanel {
         toolbar.add(new JLabel("Layer:"), gbcL);
 
         gbcL.gridx = 1;
-        toolbar.add(rbAllLocations, gbcL);
+        gbcL.gridwidth = 4;
+        gbcL.fill = GridBagConstraints.NONE;
+        toolbar.add(layerCombo, gbcL);
 
-        gbcL.gridx = 2;
-        gbcL.gridwidth = 3;
-        toolbar.add(rbLogEntries, gbcL);
+        layerCombo.addActionListener(e -> {
+            switch (layerCombo.getSelectedIndex()) {
+                case 0 -> { activeLayer = LayerFilter.ALL_LOCATIONS; updatePainters(); }
+                case 1 -> { activeLayer = LayerFilter.LOG_ENTRIES;   updatePainters(); }
+                case 2 -> { activeLayer = LayerFilter.MUF_HEATMAP;   updatePainters(); }
+            }
+        });
 
         btnSearch.addActionListener(e -> geocodeSearch());
         searchField.addActionListener(e -> geocodeSearch());
@@ -366,6 +367,13 @@ public class MapPanel extends JPanel {
     }
 
     private void updatePainters() {
+        if (activeLayer == LayerFilter.MUF_HEATMAP) {
+            mapViewer.setOverlayPainter((g2d, map, width, height) ->
+                    drawMufHeatmap((Graphics2D) g2d, map));
+            mapViewer.repaint();
+            return;
+        }
+
         // Build the display set from the active layer; always include the selected marker.
         Set<LogMapWaypoint> active = (activeLayer == LayerFilter.ALL_LOCATIONS)
                 ? allLocWaypoints : logEntryWaypoints;
@@ -408,6 +416,123 @@ public class MapPanel extends JPanel {
         });
         mapViewer.setOverlayPainter(painter);
         mapViewer.repaint();
+    }
+
+    /**
+     * Draw a semi-transparent MUF heatmap over the map.
+     * Each 5°×5° cell is coloured by the estimated Maximum Usable Frequency
+     * calculated from a simplified solar-zenith / ionospheric model.
+     *
+     * Colour key (approximate):
+     *   Deep red  &lt; 4 MHz  – band closed
+     *   Red-orange  4–7 MHz – 80/60m marginal
+     *   Yellow      7–10 MHz – 40m open
+     *   Yellow-green 10–14 MHz – 30/20m open
+     *   Green       14–21 MHz – 20/17m open
+     *   Cyan        21–28 MHz – 15/12m open
+     *   Blue        &gt;28 MHz – 10m open
+     */
+    private void drawMufHeatmap(Graphics2D g, JXMapViewer map) {
+        final int STEP = 5; // degrees per grid cell
+        java.awt.geom.Rectangle2D vb = map.getViewportBounds();
+
+        for (int lat = -90; lat < 90; lat += STEP) {
+            for (int lon = -180; lon < 180; lon += STEP) {
+                double muf = estimateMuf(lat + STEP / 2.0, lon + STEP / 2.0);
+                Color base = mufToColor(muf);
+
+                Point2D tl = map.getTileFactory().geoToPixel(
+                        new GeoPosition(lat + STEP, lon), map.getZoom());
+                Point2D br = map.getTileFactory().geoToPixel(
+                        new GeoPosition(lat, lon + STEP), map.getZoom());
+
+                int x = (int) (tl.getX() - vb.getX());
+                int y = (int) (tl.getY() - vb.getY());
+                int w = Math.max(1, (int) (br.getX() - tl.getX()));
+                int h = Math.max(1, (int) (br.getY() - tl.getY()));
+
+                // Skip cells entirely outside the visible viewport.
+                if (x + w < 0 || x > map.getWidth() || y + h < 0 || y > map.getHeight()) continue;
+
+                g.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), 130));
+                g.fillRect(x, y, w, h);
+            }
+        }
+
+        drawMufLegend(g, map.getWidth(), map.getHeight());
+    }
+
+    /** Colour assigned to a given estimated MUF value (MHz). */
+    private static Color mufToColor(double muf) {
+        if (muf < 4)  return new Color(160,   0,   0); // deep red  – closed
+        if (muf < 7)  return new Color(220,  70,   0); // red-orange – 80/60m
+        if (muf < 10) return new Color(210, 170,   0); // yellow     – 40m
+        if (muf < 14) return new Color(140, 200,   0); // yel-green  – 30/20m
+        if (muf < 21) return new Color(  0, 170,   0); // green      – 20/17m
+        if (muf < 28) return new Color(  0, 170, 150); // cyan       – 15/12m
+        return new Color(0, 90, 210);                   // blue       – 10m
+    }
+
+    /**
+     * Estimate the MUF (MHz) for a 3 000 km path centred at the given location
+     * using a simplified ionospheric model based on solar zenith angle.
+     */
+    private static double estimateMuf(double lat, double lon) {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        double utcHour   = now.getHour() + now.getMinute() / 60.0;
+
+        // Approximate local solar time
+        double lst = ((utcHour + lon / 15.0) % 24 + 24) % 24;
+
+        // Solar declination (simplified sinusoidal approximation)
+        double dayOfYear = now.getDayOfYear();
+        double decl = Math.toRadians(23.45 * Math.sin(Math.toRadians((dayOfYear - 80) * 360.0 / 365.0)));
+
+        // Cosine of solar zenith angle
+        double hourAngle = Math.toRadians((lst - 12.0) * 15.0);
+        double latRad    = Math.toRadians(lat);
+        double cosZ = Math.sin(latRad) * Math.sin(decl)
+                    + Math.cos(latRad) * Math.cos(decl) * Math.cos(hourAngle);
+
+        // foF2 ~ 2 MHz at night, up to ~10 MHz at solar noon
+        double foF2 = cosZ > 0 ? 2.0 + 8.0 * Math.pow(cosZ, 0.3) : 2.0;
+
+        // MUF(3000) ≈ foF2 × 3.6  (standard obliquity factor for 3 000 km path)
+        return foF2 * 3.6;
+    }
+
+    /** Draw a compact colour legend in the bottom-right corner of the map. */
+    private static void drawMufLegend(Graphics2D g, int mapW, int mapH) {
+        String[] labels = { "<4 MHz (closed)", "4–7 MHz (80m)", "7–10 MHz (40m)",
+                            "10–14 MHz (20m)", "14–21 MHz (17m)", "21–28 MHz (12m)", ">28 MHz (10m)" };
+        Color[] colors = {
+            new Color(160,   0,   0), new Color(220,  70,   0), new Color(210, 170,   0),
+            new Color(140, 200,   0), new Color(  0, 170,   0), new Color(  0, 170, 150),
+            new Color(  0,  90, 210)
+        };
+
+        int boxW = 14, boxH = 14, pad = 4;
+        int legendW = 140, legendH = labels.length * (boxH + pad) + pad * 2;
+        int lx = mapW - legendW - 8;
+        int ly = mapH - legendH - 8;
+
+        g.setColor(new Color(255, 255, 255, 200));
+        g.fillRoundRect(lx, ly, legendW, legendH, 6, 6);
+        g.setColor(new Color(0, 0, 0, 80));
+        g.drawRoundRect(lx, ly, legendW, legendH, 6, 6);
+
+        Font origFont = g.getFont();
+        g.setFont(origFont.deriveFont(Font.PLAIN, 10f));
+
+        for (int i = 0; i < labels.length; i++) {
+            int iy = ly + pad + i * (boxH + pad);
+            g.setColor(colors[i]);
+            g.fillRect(lx + pad, iy, boxW, boxH);
+            g.setColor(Color.DARK_GRAY);
+            g.drawRect(lx + pad, iy, boxW, boxH);
+            g.drawString(labels[i], lx + pad + boxW + 4, iy + boxH - 2);
+        }
+        g.setFont(origFont);
     }
 
     /** Return the waypoint under the given screen point, or null if none. */
