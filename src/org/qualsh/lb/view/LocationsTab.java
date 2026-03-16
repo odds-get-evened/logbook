@@ -180,9 +180,18 @@ public class LocationsTab extends JPanel {
 			public void actionPerformed(ActionEvent e) {
 				Place selected = placeList.getSelectedValue();
 				if (selected == null) return;
+				if (Place.isUsedInLogs(selected.getId())) {
+					JOptionPane.showMessageDialog(
+						LocationsTab.this,
+						"\"" + selected.getPlaceName() + "\" cannot be deleted because it is referenced by one or more log entries.",
+						"Location In Use",
+						JOptionPane.WARNING_MESSAGE
+					);
+					return;
+				}
 				int confirm = JOptionPane.showConfirmDialog(
 					LocationsTab.this,
-					"Delete \"" + selected.getPlaceName() + "\"?\nLog entries using this location will be unlinked.",
+					"Delete \"" + selected.getPlaceName() + "\"?",
 					"Confirm Delete",
 					JOptionPane.YES_NO_OPTION
 				);

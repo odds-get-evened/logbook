@@ -8,7 +8,6 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.LayoutManager;
-import java.awt.SystemColor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.text.SimpleDateFormat;
@@ -143,7 +142,6 @@ public class LogInteraction extends JPanel {
 		
 		detailsPanel = new JPanel();
 		detailsPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		detailsPanel.setBackground(SystemColor.info);
 		GridBagConstraints gbc_detailsPanel = new GridBagConstraints();
 		gbc_detailsPanel.gridwidth = 5;
 		gbc_detailsPanel.insets = new Insets(0, 0, 5, 0);
@@ -168,7 +166,6 @@ public class LogInteraction extends JPanel {
 		
 		textInfoFreq = new JTextField();
 		textInfoFreq.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		textInfoFreq.setBackground(SystemColor.info);
 		GridBagConstraints gbc_textInfoFreq = new GridBagConstraints();
 		gbc_textInfoFreq.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textInfoFreq.insets = new Insets(0, 0, 5, 0);
@@ -190,7 +187,6 @@ public class LogInteraction extends JPanel {
 		
 		textInfoDateOn = new JTextField();
 		textInfoDateOn.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		textInfoDateOn.setBackground(SystemColor.info);
 		GridBagConstraints gbc_textInfoDateOn = new GridBagConstraints();
 		gbc_textInfoDateOn.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textInfoDateOn.insets = new Insets(0, 0, 5, 0);
@@ -222,7 +218,6 @@ public class LogInteraction extends JPanel {
 		
 		textInfoDesc = new TextNote();
 		textInfoDesc.setFont(new Font("Tahoma", Font.PLAIN, 12));
-		textInfoDesc.setBackground(SystemColor.info);
 		textInfoDesc.setRows(5);
 		scrollPane_1.setViewportView(textInfoDesc);
 		

@@ -17,7 +17,6 @@ import org.qualsh.lb.place.Place;
 import java.awt.GridBagConstraints;
 import java.awt.Insets;
 import java.awt.BorderLayout;
-import java.awt.SystemColor;
 
 public class ViewRXPanel extends JPanel {
 	
@@ -48,7 +47,6 @@ public class ViewRXPanel extends JPanel {
 		
 		JPanel detailsPanel = new JPanel();
 		detailsPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
-		detailsPanel.setBackground(SystemColor.info);
 		add(detailsPanel);
 		GridBagLayout gbl_detailsPanel = new GridBagLayout();
 		gbl_detailsPanel.columnWidths = new int[]{0, 0};
