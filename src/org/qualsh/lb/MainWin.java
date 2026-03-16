@@ -114,8 +114,9 @@ public class MainWin extends JFrame {
 		mapPanel = new MapPanel();
 
 		// Split left panel: logs table on top, map below
+		// map = 2/3 of logs table → logs=60%, map=40%
 		JSplitPane leftSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, logsPanel, mapPanel);
-		leftSplit.setResizeWeight(0.67);  // logs table gets ~2/3, map gets ~1/3
+		leftSplit.setResizeWeight(0.60);
 		leftSplit.setBorder(null);
 		leftPanel.add(leftSplit, BorderLayout.CENTER);
 
@@ -167,6 +168,7 @@ public class MainWin extends JFrame {
 		});
 		
 		setVisible(true);
+		SwingUtilities.invokeLater(() -> leftSplit.setDividerLocation(0.60));
 	}
 
 	private void setupIcons() {

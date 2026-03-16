@@ -394,9 +394,9 @@ public class LogInteraction extends JPanel {
 		logEntryForm.add(label_3, "2, 10, right, top");
 		
 		scrollPane = new JScrollPane();
-		scrollPane.setPreferredSize(new Dimension(4, 150));
+		scrollPane.setPreferredSize(new Dimension(4, 70));
 		logEntryForm.add(scrollPane, "4, 10, fill, fill");
-		
+
 		textDescription = new JTextArea();
 		textDescription.setRows(2);
 		scrollPane.setViewportView(textDescription);
