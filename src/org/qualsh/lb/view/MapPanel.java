@@ -44,6 +44,7 @@ import org.jxmapviewer.viewer.WaypointPainter;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
+import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 
