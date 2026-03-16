@@ -2,6 +2,7 @@ package org.qualsh.lb.view;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
@@ -327,19 +328,13 @@ public class LogInteraction extends JPanel {
 				FormFactory.RELATED_GAP_ROWSPEC,
 				FormFactory.DEFAULT_ROWSPEC,
 				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
-				FormFactory.DEFAULT_ROWSPEC,
-				FormFactory.RELATED_GAP_ROWSPEC,
 				RowSpec.decode("default:grow"),
+				FormFactory.RELATED_GAP_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.RELATED_GAP_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,
+				FormFactory.RELATED_GAP_ROWSPEC,
+				FormFactory.DEFAULT_ROWSPEC,
 				FormFactory.RELATED_GAP_ROWSPEC,
 				FormFactory.DEFAULT_ROWSPEC,}));
 		
@@ -351,12 +346,6 @@ public class LogInteraction extends JPanel {
 		logEntryForm.add(textFrequency, "4, 2, fill, default");
 		
 		editLocationPanel = new EditLocationPanel((Location) null);
-		GridBagLayout gbl_editLocationPanel = (GridBagLayout) editLocationPanel.getLayout();
-		gbl_editLocationPanel.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
-		gbl_editLocationPanel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
-		gbl_editLocationPanel.columnWeights = new double[]{1.0};
-		gbl_editLocationPanel.columnWidths = new int[]{0};
-		logEntryForm.add(editLocationPanel, "4, 22, fill, fill");
 		
 		label_1 = new JLabel("Mode");
 		label_1.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -391,7 +380,7 @@ public class LogInteraction extends JPanel {
 		textDescription.setRows(2);
 		scrollPane.setViewportView(textDescription);
 		
-		label_4 = new JLabel("RX location");
+		label_4 = new JLabel("My Location");
 		label_4.setFont(new Font("Tahoma", Font.BOLD, 12));
 		logEntryForm.add(label_4, "2, 12, right, default");
 		
@@ -430,44 +419,41 @@ public class LogInteraction extends JPanel {
 		});
 		btnChangeLocation.setToolTipText("Select your reception (RX) location for this log entry");
 		logEntryForm.add(btnChangeLocation, "4, 16, left, default");
-		logEntryForm.add(saveLogBtn, "2, 18");
-		
+
 		btnCancelLogEntry = new JButton("Cancel");
-		btnCancelLogEntry.setMinimumSize(new Dimension(50, 29));
-		btnCancelLogEntry.setPreferredSize(new Dimension(50, 29));
-		btnCancelLogEntry.setMaximumSize(new Dimension(50, 29));
 		btnCancelLogEntry.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				LogInteraction.this.setCurrentLog(null);
-				LogInteraction.this.getEditLocationPanel().unsetLocation();
 				LogInteraction.this.resetEntry();
 			}
 		});
-		logEntryForm.add(btnCancelLogEntry, "4, 18");
+
+		JPanel actionBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		actionBtnPanel.add(saveLogBtn);
+		actionBtnPanel.add(btnCancelLogEntry);
+		logEntryForm.add(actionBtnPanel, "4, 18");
 		
 		btnLocation = new JButton("Location...");
 		btnLocation.addActionListener(new ActionListener() {
-			
+
 			public void actionPerformed(ActionEvent e) {
 				LocationEditor le = new LocationEditor(LogInteraction.this.getMainWin());
 				le.setLogInteraction(LogInteraction.this);
 				setLocEditor(le);
 				getLocEditor().setVisible(true);
 			}
-			
+
 		});
-		logEntryForm.add(btnLocation, "2, 24");
-		
+
 		btnRemoveLocation = new JButton("Remove Location");
 		btnRemoveLocation.addActionListener(new ActionListener() {
 
 			public void actionPerformed(ActionEvent e) {
 				LogInteraction.this.getEditLocationPanel().unsetLocation();
 			}
-			
+
 		});
 		btnRemoveLocation.setEnabled(false);
-		logEntryForm.add(btnRemoveLocation, "4, 24");
 		
 		locationsPanel = new JPanel();
 		tabbedPane.addTab("Locations", null, locationsPanel, null);
@@ -556,14 +542,6 @@ public class LogInteraction extends JPanel {
 			log.setDateOn(timestamp);
 			log.setDescription(getTextDescription().getText());
 			
-			if(this.getEditLocationPanel().getCurrentLocation() != null) {
-				System.out.println("Current location: " + this.getEditLocationPanel().getCurrentLocation());
-				log.setLocation(this.getEditLocationPanel().getCurrentLocation().getId());
-			} else {
-				System.out.println("Current location ID: has been reset to NULL.");
-				log.setLocation(0);
-			}
-		
 			if (this.selectedMyPlace != null) {
 				log.setMyPlace(this.selectedMyPlace.getId());
 			} else {
@@ -597,10 +575,6 @@ public class LogInteraction extends JPanel {
 			int timestamp = Utilities.stringToUnixTimeStamp(dateStr, "MM/dd/yyyy HH:mm");
 			log.setDateOn(timestamp);
 			log.setDescription(textDescription.getText());
-			if(this.getEditLocationPanel().getCurrentLocation() != null) {
-				log.setLocation(this.getEditLocationPanel().getCurrentLocation().getId());
-			}
-
 			if (this.selectedMyPlace != null) {
 				log.setMyPlace(this.selectedMyPlace.getId());
 			} else {
