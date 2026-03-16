@@ -4,10 +4,13 @@ import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -23,10 +26,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
+import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JRadioButton;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
@@ -106,12 +111,20 @@ public class MapPanel extends JPanel {
         mapViewer.addMouseMotionListener(pml);
         mapViewer.addMouseWheelListener(new ZoomMouseWheelListenerCursor(mapViewer));
 
-        // ---- click handler: coordinate display / pick callback ----
+        // ---- click handler: waypoint popup / coordinate display / pick callback ----
         mapViewer.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (!SwingUtilities.isLeftMouseButton(e)) return;
                 GeoPosition pos = mapViewer.convertPointToGeoPosition(e.getPoint());
+                if (!pickingMode) {
+                    LogMapWaypoint hit = findWaypointAt(e.getPoint());
+                    if (hit != null) {
+                        statusLabel.setText(formatCoord(pos.getLatitude(), pos.getLongitude()));
+                        showWaypointPopup(hit, e.getPoint());
+                        return;
+                    }
+                }
                 String coordText = formatCoord(pos.getLatitude(), pos.getLongitude());
                 statusLabel.setText(coordText);
                 if (pickingMode && locationPickCallback != null) {
@@ -215,13 +228,13 @@ public class MapPanel extends JPanel {
             if (locations != null) {
                 for (Location loc : locations) {
                     tryAddWaypoint(fresh, loc.getStrLatitude(), loc.getStrLongitude(),
-                            LogMapWaypoint.Type.TX, null);
+                            LogMapWaypoint.Type.TX, null, loc.getLocationName());
                 }
             }
             if (places != null) {
                 for (Place place : places) {
                     tryAddWaypoint(fresh, place.getLatitude(), place.getLongitude(),
-                            LogMapWaypoint.Type.RX, null);
+                            LogMapWaypoint.Type.RX, null, place.getPlaceName());
                 }
             }
             SwingUtilities.invokeLater(() -> {
@@ -244,13 +257,15 @@ public class MapPanel extends JPanel {
             for (Log log : logs) {
                 Place txPlace = log.getFullTxPlace();
                 if (txPlace != null) {
+                    String txLabel = txPlace.getPlaceName() != null ? txPlace.getPlaceName() : "";
                     tryAddWaypoint(fresh, txPlace.getLatitude(), txPlace.getLongitude(),
-                            LogMapWaypoint.Type.TX, log);
+                            LogMapWaypoint.Type.TX, log, txLabel);
                 }
                 Place place = log.getFullMyPlace();
                 if (place != null) {
+                    String rxLabel = place.getPlaceName() != null ? place.getPlaceName() : "";
                     tryAddWaypoint(fresh, place.getLatitude(), place.getLongitude(),
-                            LogMapWaypoint.Type.RX, log);
+                            LogMapWaypoint.Type.RX, log, rxLabel);
                 }
             }
             SwingUtilities.invokeLater(() -> {
@@ -290,6 +305,28 @@ public class MapPanel extends JPanel {
     }
 
     /**
+     * Zoom the map to fit both TX and RX locations of the given log entry.
+     * Falls back to panning if only one position is available.
+     */
+    public void zoomToLogBounds(Log log) {
+        Set<GeoPosition> positions = new HashSet<>();
+        for (LogMapWaypoint wp : logEntryWaypoints) {
+            if (wp.getLog() != null && wp.getLog().getId() == log.getId()) {
+                positions.add(wp.getPosition());
+            }
+        }
+        if (positions.isEmpty()) return;
+        SwingUtilities.invokeLater(() -> {
+            if (positions.size() == 1) {
+                mapViewer.setAddressLocation(positions.iterator().next());
+                mapViewer.setZoom(5);
+            } else {
+                mapViewer.zoomToBestFit(positions, 0.8);
+            }
+        });
+    }
+
+    /**
      * Pan the map to the given coordinates without changing existing markers.
      * Useful for previewing a station or place location.
      */
@@ -318,12 +355,12 @@ public class MapPanel extends JPanel {
 
     private void tryAddWaypoint(Set<LogMapWaypoint> target,
                                 String latStr, String lonStr,
-                                LogMapWaypoint.Type type, Log log) {
+                                LogMapWaypoint.Type type, Log log, String label) {
         if (latStr == null || latStr.isBlank() || lonStr == null || lonStr.isBlank()) return;
         try {
             double lat = Double.parseDouble(latStr.trim());
             double lon = Double.parseDouble(lonStr.trim());
-            target.add(new LogMapWaypoint(new GeoPosition(lat, lon), type, log));
+            target.add(new LogMapWaypoint(new GeoPosition(lat, lon), type, log, label));
         } catch (NumberFormatException ignored) {
         }
     }
@@ -371,6 +408,64 @@ public class MapPanel extends JPanel {
         });
         mapViewer.setOverlayPainter(painter);
         mapViewer.repaint();
+    }
+
+    /** Return the waypoint under the given screen point, or null if none. */
+    private LogMapWaypoint findWaypointAt(Point screenPoint) {
+        Set<LogMapWaypoint> active = (activeLayer == LayerFilter.ALL_LOCATIONS)
+                ? allLocWaypoints : logEntryWaypoints;
+        Set<LogMapWaypoint> toSearch = new HashSet<>(active);
+        if (selectedWaypoint != null) toSearch.add(selectedWaypoint);
+
+        int hitRadius = 10;
+        for (LogMapWaypoint wp : toSearch) {
+            Point2D tilePos = mapViewer.getTileFactory().geoToPixel(
+                    wp.getPosition(), mapViewer.getZoom());
+            java.awt.geom.Rectangle2D vb = mapViewer.getViewportBounds();
+            int px = (int) (tilePos.getX() - vb.getX());
+            int py = (int) (tilePos.getY() - vb.getY());
+            int dx = screenPoint.x - px;
+            int dy = screenPoint.y - py;
+            if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                return wp;
+            }
+        }
+        return null;
+    }
+
+    /** Show a station-details popup card near the clicked waypoint. */
+    private void showWaypointPopup(LogMapWaypoint wp, Point screenPoint) {
+        JPanel card = new JPanel(new GridLayout(0, 1, 0, 3));
+        card.setBorder(new EmptyBorder(6, 8, 6, 8));
+
+        String typeText = wp.getType() == LogMapWaypoint.Type.TX ? "TX Transmitter" : "RX Location";
+        JLabel titleLabel = new JLabel(typeText);
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 12f));
+        card.add(titleLabel);
+
+        if (!wp.getLabel().isEmpty()) {
+            card.add(new JLabel(wp.getLabel()));
+        }
+
+        if (wp.getLog() != null) {
+            Log log = wp.getLog();
+            card.add(new JLabel(log.getFrequency() + " kHz  \u2022  " + log.getMode()));
+            String desc = log.getDescription();
+            if (desc != null && !desc.isEmpty()) {
+                if (desc.length() > 60) desc = desc.substring(0, 57) + "\u2026";
+                card.add(new JLabel("<html>" + desc + "</html>"));
+            }
+        }
+
+        GeoPosition pos = wp.getPosition();
+        JLabel coordLabel = new JLabel(formatCoord(pos.getLatitude(), pos.getLongitude()));
+        coordLabel.setForeground(Color.DARK_GRAY);
+        card.add(coordLabel);
+
+        JPopupMenu popup = new JPopupMenu();
+        popup.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY));
+        popup.add(card);
+        popup.show(mapViewer, screenPoint.x + 6, screenPoint.y + 6);
     }
 
     @SuppressWarnings("unchecked")
@@ -428,14 +523,17 @@ public class MapPanel extends JPanel {
 
         private final Type type;
         private final Log log;
+        private final String label;
 
-        LogMapWaypoint(GeoPosition pos, Type type, Log log) {
+        LogMapWaypoint(GeoPosition pos, Type type, Log log, String label) {
             super(pos);
             this.type = type;
             this.log = log;
+            this.label = label != null ? label : "";
         }
 
-        Type getType() { return type; }
-        Log getLog()   { return log; }
+        Type getType()   { return type; }
+        Log getLog()     { return log; }
+        String getLabel(){ return label; }
     }
 }

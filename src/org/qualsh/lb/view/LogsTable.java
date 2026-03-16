@@ -15,6 +15,7 @@ import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
+
 import javax.swing.event.ListSelectionListener;
 import javax.swing.table.TableCellRenderer;
 
@@ -95,22 +96,36 @@ public class LogsTable extends JTable {
 		});
 		
 		/**
-		 * add support for right click on table row, to show popup
+		 * add support for right click on table row, to show popup;
+		 * double-click zooms map to the log's TX and RX locations.
 		 */
 		this.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+					JTable table = (JTable) e.getSource();
+					int r = table.rowAtPoint(e.getPoint());
+					if (r >= 0 && r < table.getRowCount() && LogsTable.this.getMapPanel() != null) {
+						LogsModel lm = (LogsModel) getModel();
+						Log log = lm.getData().get(convertRowIndexToModel(r));
+						LogsTable.this.getMapPanel().zoomToLogBounds(log);
+					}
+				}
+			}
+
 			@Override
 			public void mouseReleased(MouseEvent e) {
 				Point point = e.getPoint();
 				JTable table = (JTable) e.getSource();
-				
+
 				if(e.getButton() == MouseEvent.BUTTON3) {
 					int r = table.rowAtPoint(point);
 					System.out.println(r);
-					
+
 					LogsModel lm = (LogsModel) getModel();
 					Log log = lm.getData().get(convertRowIndexToModel(r));
 					LogsTable.this.setSelectedLog(log);
-					
+
 					if(r >= 0 && r < table.getRowCount()) {
 						table.setRowSelectionInterval(r, r);
 						LogsTable.this.getPopup().show(e.getComponent(), e.getX(), e.getY());
