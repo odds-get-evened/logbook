@@ -44,7 +44,6 @@ import org.jxmapviewer.viewer.WaypointPainter;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
-import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 
@@ -242,9 +241,9 @@ public class MapPanel extends JPanel {
         new Thread(() -> {
             Set<LogMapWaypoint> fresh = new HashSet<>();
             for (Log log : logs) {
-                Location loc = log.getFullLocation();
-                if (loc != null) {
-                    tryAddWaypoint(fresh, loc.getStrLatitude(), loc.getStrLongitude(),
+                Place txPlace = log.getFullTxPlace();
+                if (txPlace != null) {
+                    tryAddWaypoint(fresh, txPlace.getLatitude(), txPlace.getLongitude(),
                             LogMapWaypoint.Type.TX, log);
                 }
                 Place place = log.getFullMyPlace();

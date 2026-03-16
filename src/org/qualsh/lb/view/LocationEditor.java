@@ -1,252 +1,215 @@
 package org.qualsh.lb.view;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.FocusEvent;
-import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.awt.event.WindowEvent;
-import java.awt.event.WindowListener;
 
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
+import javax.swing.ListCellRenderer;
+import javax.swing.ListSelectionModel;
+import javax.swing.UIDefaults;
 import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
-import org.qualsh.lb.data.LocationListModel;
-import org.qualsh.lb.view.field.StationFinder;
+import org.qualsh.lb.data.ViewPlacesModel;
+import org.qualsh.lb.place.Place;
 
-public class LocationEditor extends JDialog implements WindowListener {
+public class LocationEditor extends JDialog {
 
-	/**
-	 * 
-	 */
 	private static final long serialVersionUID = -4456464571681368014L;
-	
-	private LogInteraction logInteraction;
 
+	private JList<Place> placeList;
+	private ViewPlacesModel placesModel;
+	private Place selectedPlace = null;
 	private JButton btnAssign;
 
-	private JButton btnCancel;
-
-	private LocationsEditorList locationsEditorList;
-
-	private StationFinder textStationFinder;
-	
 	public LocationEditor(JFrame frame) {
-		super(frame);
-		
-		setMinimumSize(new Dimension(300, 400));
-		setTitle("Locations");
-		setModal(true);
-		
+		super(frame, "Locations", true);
+
 		Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 		int winW = (int) (screenSize.getWidth() * 0.25);
 		int winH = (int) (screenSize.getHeight() * 0.3);
-		setSize(winW, winH);
-		
-		int winX = (int) ((screenSize.getWidth() - getSize().getWidth()) / 2);
-		int winY = (int) ((screenSize.getHeight() - getSize().getHeight()) / 2);
-		setLocation(winX, winY);
-		
-		try {
-			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-		} catch (ClassNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (InstantiationException e1) {
-			e1.printStackTrace();
-		} catch (IllegalAccessException e1) {
-			e1.printStackTrace();
-		} catch (UnsupportedLookAndFeelException e1) {
-			e1.printStackTrace();
-		}
-		
-		JPanel panel = new JPanel();
-		panel.setBorder(new EmptyBorder(10, 10, 1, 10));
-		getContentPane().add(panel, BorderLayout.CENTER);
-		GridBagLayout gbl_panel = new GridBagLayout();
-		gbl_panel.columnWidths = new int[]{0, 0, 0};
-		gbl_panel.rowHeights = new int[]{0, 0, 0, 0};
-		gbl_panel.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
-		gbl_panel.rowWeights = new double[]{0.0, 1.0, 0.0, Double.MIN_VALUE};
-		panel.setLayout(gbl_panel);
-		
-		JLabel lblStation = new JLabel("Station");
-		GridBagConstraints gbc_lblStation = new GridBagConstraints();
-		gbc_lblStation.insets = new Insets(0, 0, 5, 5);
-		gbc_lblStation.anchor = GridBagConstraints.EAST;
-		gbc_lblStation.gridx = 0;
-		gbc_lblStation.gridy = 0;
-		panel.add(lblStation, gbc_lblStation);
-		
-		textStationFinder = new StationFinder();
-		textStationFinder.getEditor().getEditorComponent().addFocusListener(new FocusListener() {
+		setSize(Math.max(winW, 300), Math.max(winH, 400));
+		setMinimumSize(new Dimension(300, 400));
+		setLocation(
+			(int) ((screenSize.getWidth() - getWidth()) / 2),
+			(int) ((screenSize.getHeight() - getHeight()) / 2)
+		);
 
-			public void focusGained(FocusEvent e) {}
+		JPanel root = new JPanel(new BorderLayout(0, 0));
+		root.setBorder(new EmptyBorder(10, 10, 8, 10));
+		getContentPane().add(root, BorderLayout.CENTER);
 
-			public void focusLost(FocusEvent e) {
-				JTextField tf = (JTextField) e.getSource();
-				if(tf.getText().isEmpty()) {
-					// get all locations (resetting list)
-					getTextStationFinder().getLocationEditorList().loadAllLocations();
-					getBtnAssign().setEnabled(false);
-				}
+		// Search field row
+		JPanel searchRow = new JPanel(new GridBagLayout());
+		searchRow.setBorder(new EmptyBorder(0, 0, 6, 0));
+		root.add(searchRow, BorderLayout.NORTH);
+
+		JLabel lblSearch = new JLabel("Search");
+		GridBagConstraints gbc = new GridBagConstraints();
+		gbc.gridx = 0;
+		gbc.gridy = 0;
+		gbc.insets = new Insets(0, 0, 0, 6);
+		gbc.anchor = GridBagConstraints.WEST;
+		searchRow.add(lblSearch, gbc);
+
+		JTextField txtSearch = new JTextField();
+		gbc = new GridBagConstraints();
+		gbc.gridx = 1;
+		gbc.gridy = 0;
+		gbc.fill = GridBagConstraints.HORIZONTAL;
+		gbc.weightx = 1.0;
+		searchRow.add(txtSearch, gbc);
+
+		// Places list
+		placesModel = new ViewPlacesModel();
+		placesModel.setAllPlaces();
+
+		placeList = new JList<>(placesModel);
+		placeList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		placeList.setCellRenderer(new PlaceCellRenderer());
+
+		JScrollPane scrollPane = new JScrollPane(placeList);
+		root.add(scrollPane, BorderLayout.CENTER);
+
+		// Buttons
+		JPanel btnPanel = new JPanel(new GridBagLayout());
+		btnPanel.setBorder(new EmptyBorder(6, 0, 0, 0));
+		root.add(btnPanel, BorderLayout.SOUTH);
+
+		btnAssign = new JButton("Assign");
+		btnAssign.setEnabled(false);
+		GridBagConstraints gbcBtn = new GridBagConstraints();
+		gbcBtn.gridx = 0;
+		gbcBtn.gridy = 0;
+		gbcBtn.weightx = 1.0;
+		gbcBtn.anchor = GridBagConstraints.EAST;
+		gbcBtn.insets = new Insets(0, 0, 0, 4);
+		btnPanel.add(btnAssign, gbcBtn);
+
+		JButton btnClose = new JButton("Close");
+		gbcBtn = new GridBagConstraints();
+		gbcBtn.gridx = 1;
+		gbcBtn.gridy = 0;
+		btnPanel.add(btnClose, gbcBtn);
+
+		// Listeners
+		placeList.addListSelectionListener(new ListSelectionListener() {
+			public void valueChanged(ListSelectionEvent e) {
+				btnAssign.setEnabled(placeList.getSelectedValue() != null);
 			}
-			
 		});
-		GridBagConstraints gbc_textStationFinder = new GridBagConstraints();
-		gbc_textStationFinder.insets = new Insets(0, 0, 5, 0);
-		gbc_textStationFinder.fill = GridBagConstraints.HORIZONTAL;
-		gbc_textStationFinder.gridx = 1;
-		gbc_textStationFinder.gridy = 0;
-		panel.add(textStationFinder, gbc_textStationFinder);
-		
-		JScrollPane scrollPane = new JScrollPane();
-		GridBagConstraints gbc_scrollPane = new GridBagConstraints();
-		gbc_scrollPane.insets = new Insets(0, 0, 5, 0);
-		gbc_scrollPane.fill = GridBagConstraints.BOTH;
-		gbc_scrollPane.gridx = 1;
-		gbc_scrollPane.gridy = 1;
-		panel.add(scrollPane, gbc_scrollPane);
-		
-		LocationListModel locModel = new LocationListModel();
-		locationsEditorList = new LocationsEditorList(locModel);
-		
-		/**
-		 * assign location when user double-clicks
-		 */
-		locationsEditorList.addMouseListener(new MouseListener() {
 
+		placeList.addMouseListener(new MouseListener() {
 			public void mouseClicked(MouseEvent e) {
-				if(e.getClickCount() == 2) {
-					LocationsEditorList lel = (LocationsEditorList) e.getSource();
-					getLogInteraction().getEditLocationPanel().setCurrentLocation(lel.getSelectedValue());
-					getLogInteraction().getEditLocationPanel().setVisible(true);
+				if (e.getClickCount() == 2 && placeList.getSelectedValue() != null) {
+					selectedPlace = placeList.getSelectedValue();
+					LocationEditor.this.setVisible(false);
 				}
 			}
-
 			public void mousePressed(MouseEvent e) {}
-
 			public void mouseReleased(MouseEvent e) {}
-
 			public void mouseEntered(MouseEvent e) {}
-
 			public void mouseExited(MouseEvent e) {}
 		});
-		
-		locationsEditorList.addListSelectionListener(new ListSelectionListener() {
 
-			public void valueChanged(ListSelectionEvent e) {
-				int first = e.getFirstIndex();
-				//int last = e.getLastIndex();
-				
-				if(first < 0) {
-					// deselection
-					btnAssign.setEnabled(false);
-				} else {
-					btnAssign.setEnabled(true);
-				}
-			}
-			
-		});
-		
-		textStationFinder.setLocationEditorList(locationsEditorList);
-		
-		scrollPane.setViewportView(locationsEditorList);
-		
-		JPanel panel_1 = new JPanel();
-		GridBagConstraints gbc_panel_1 = new GridBagConstraints();
-		gbc_panel_1.anchor = GridBagConstraints.EAST;
-		gbc_panel_1.fill = GridBagConstraints.VERTICAL;
-		gbc_panel_1.gridx = 1;
-		gbc_panel_1.gridy = 2;
-		panel.add(panel_1, gbc_panel_1);
-		
-		btnAssign = new JButton("Assign");
 		btnAssign.addActionListener(new ActionListener() {
-
 			public void actionPerformed(ActionEvent e) {
-				getLogInteraction().getEditLocationPanel().setCurrentLocation(getLocationsEditorList().getSelectedValue());
-				getLogInteraction().getEditLocationPanel().setVisible(true);
-				setVisible(false);
+				selectedPlace = placeList.getSelectedValue();
+				LocationEditor.this.setVisible(false);
 			}
-			
 		});
+
+		btnClose.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				LocationEditor.this.setVisible(false);
+			}
+		});
+
+		// Real-time search filter
+		txtSearch.getDocument().addDocumentListener(new DocumentListener() {
+			public void insertUpdate(DocumentEvent e) { filter(txtSearch.getText()); }
+			public void removeUpdate(DocumentEvent e) { filter(txtSearch.getText()); }
+			public void changedUpdate(DocumentEvent e) { filter(txtSearch.getText()); }
+		});
+	}
+
+	private void filter(String query) {
+		String q = query.trim().toLowerCase();
+		placesModel.setAllPlaces();
+		if (q.isEmpty()) {
+			placeList.updateUI();
+			return;
+		}
+		java.util.ArrayList<Place> all = new java.util.ArrayList<>(placesModel.getData());
+		placesModel.getData().clear();
+		for (Place p : all) {
+			if (p.getPlaceName() != null && p.getPlaceName().toLowerCase().contains(q)) {
+				placesModel.getData().add(p);
+			}
+		}
+		placeList.updateUI();
 		btnAssign.setEnabled(false);
-		panel_1.add(btnAssign);
-		
-		btnCancel = new JButton("Close");
-		btnCancel.addActionListener(new ActionListener() {
+	}
 
-			public void actionPerformed(ActionEvent e) {
-				setVisible(false);
+	/** Returns the Place the user selected, or null if cancelled. */
+	public Place getSelectedPlace() {
+		return selectedPlace;
+	}
+
+	private static class PlaceCellRenderer implements ListCellRenderer<Place> {
+		public Component getListCellRendererComponent(
+				JList<? extends Place> list, Place value, int index,
+				boolean isSelected, boolean cellHasFocus) {
+
+			JPanel pnl = new JPanel(new BorderLayout(0, 2));
+			pnl.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+
+			JLabel lblName = new JLabel(value.getPlaceName());
+			lblName.setFont(new Font("Tahoma", Font.BOLD, 12));
+			pnl.add(lblName, BorderLayout.NORTH);
+
+			String lat = value.getLatitude();
+			String lon = value.getLongitude();
+			String coords = (lat != null && lon != null && !lat.isBlank() && !lon.isBlank())
+				? lat + ", " + lon : "No coordinates";
+			JLabel lblCoords = new JLabel(coords);
+			lblCoords.setFont(new Font("Tahoma", Font.PLAIN, 11));
+			pnl.add(lblCoords, BorderLayout.SOUTH);
+
+			UIDefaults defs = UIManager.getDefaults();
+			if (isSelected || cellHasFocus) {
+				pnl.setBackground(defs.getColor("List.selectionBackground"));
+				lblName.setForeground(defs.getColor("List.selectionForeground"));
+				lblCoords.setForeground(defs.getColor("List.selectionForeground"));
+			} else {
+				pnl.setBackground(defs.getColor("List.background"));
+				lblName.setForeground(defs.getColor("List.foreground"));
+				lblCoords.setForeground(defs.getColor("List.foreground"));
 			}
-			
-		});
-		panel_1.add(btnCancel);
-				
-		addWindowListener(this);
+
+			return pnl;
+		}
 	}
-
-	public LogInteraction getLogInteraction() {
-		return logInteraction;
-	}
-
-	public void setLogInteraction(LogInteraction logInteraction) {
-		this.logInteraction = logInteraction;
-	}
-
-	public void windowOpened(WindowEvent e) {}
-
-	public void windowClosing(WindowEvent e) {}
-
-	public void windowClosed(WindowEvent e) {}
-
-	public void windowIconified(WindowEvent e) {}
-
-	public void windowDeiconified(WindowEvent e) {}
-
-	public void windowActivated(WindowEvent e) {}
-
-	public void windowDeactivated(WindowEvent e) {}
-
-	public LocationsEditorList getLocationsEditorList() {
-		return locationsEditorList;
-	}
-
-	public void setLocationsEditorList(LocationsEditorList locationsEditorList) {
-		this.locationsEditorList = locationsEditorList;
-	}
-
-	public StationFinder getTextStationFinder() {
-		return textStationFinder;
-	}
-
-	public void setTextStationFinder(StationFinder textStationFinder) {
-		this.textStationFinder = textStationFinder;
-	}
-
-	public JButton getBtnAssign() {
-		return btnAssign;
-	}
-
-	public void setBtnAssign(JButton btnAssign) {
-		this.btnAssign = btnAssign;
-	}
-
 }

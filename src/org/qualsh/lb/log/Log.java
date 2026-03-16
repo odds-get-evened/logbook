@@ -179,6 +179,11 @@ public class Log {
 		return null;
 	}
 	
+	public Place getFullTxPlace() {
+		if (this.getLocation() == 0) return null;
+		return Place.getOne(this.getLocation());
+	}
+
 	public Place getFullMyPlace() {
 		return Place.getOne(this.getMyPlace());
 	}

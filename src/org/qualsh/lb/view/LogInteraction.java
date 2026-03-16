@@ -36,7 +36,6 @@ import javax.swing.text.DefaultFormatterFactory;
 
 import org.qualsh.lb.MainWin;
 import org.qualsh.lb.data.LogsModel;
-import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.FormError;
@@ -67,7 +66,6 @@ public class LogInteraction extends JPanel {
 	private JTabbedPane tabbedPane;
 	private JButton btnEditLog;
 	private Log currentLog = null;
-	private LocationEditor locEditor;
 	private ViewLocationPanel viewLocationPanel;
 	private JPanel locationsPanel;
 	private LocationsTab locationsTab;
@@ -408,9 +406,11 @@ public class LogInteraction extends JPanel {
 		btnLocation.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				LocationEditor le = new LocationEditor(LogInteraction.this.getMainWin());
-				le.setLogInteraction(LogInteraction.this);
-				setLocEditor(le);
-				getLocEditor().setVisible(true);
+				le.setVisible(true);
+				Place picked = le.getSelectedPlace();
+				if (picked != null) {
+					editLocationPanel.setCurrentPlace(picked);
+				}
 			}
 		});
 
@@ -427,7 +427,7 @@ public class LogInteraction extends JPanel {
 		lblTxLocation.setFont(new Font("Tahoma", Font.BOLD, 12));
 		logEntryForm.add(lblTxLocation, "2, 12, right, top");
 
-		editLocationPanel = new EditLocationPanel((Location) null);
+		editLocationPanel = new EditLocationPanel((Place) null);
 		logEntryForm.add(editLocationPanel, "4, 12, fill, fill");
 
 		// TX Location action buttons (row 14)
@@ -526,7 +526,7 @@ public class LogInteraction extends JPanel {
 		getTextDescription().setText(log.getDescription());
 		
 		if(log.getLocation() != 0) {
-			this.getEditLocationPanel().setCurrentLocation(log.getFullLocation());
+			this.getEditLocationPanel().setCurrentPlace(log.getFullTxPlace());
 		}
 
 		if (log.getMyPlace() != 0) {
@@ -577,7 +577,7 @@ public class LogInteraction extends JPanel {
 			log.setDateOn(timestamp);
 			log.setDescription(getTextDescription().getText());
 
-			Location txLoc = editLocationPanel.getCurrentLocation();
+			Place txLoc = editLocationPanel.getCurrentPlace();
 			log.setLocation(txLoc != null ? txLoc.getId() : 0);
 
 			if (this.selectedMyPlace != null) {
@@ -613,8 +613,8 @@ public class LogInteraction extends JPanel {
 			int timestamp = Utilities.stringToUnixTimeStamp(dateStr, "MM/dd/yyyy HH:mm");
 			log.setDateOn(timestamp);
 			log.setDescription(textDescription.getText());
-			if (editLocationPanel.getCurrentLocation() != null) {
-				log.setLocation(editLocationPanel.getCurrentLocation().getId());
+			if (editLocationPanel.getCurrentPlace() != null) {
+				log.setLocation(editLocationPanel.getCurrentPlace().getId());
 			}
 			if (this.selectedMyPlace != null) {
 				log.setMyPlace(this.selectedMyPlace.getId());
@@ -813,14 +813,6 @@ public class LogInteraction extends JPanel {
 
 	public void setBtnLocation(JButton btnLocation) {
 		this.btnLocation = btnLocation;
-	}
-
-	public LocationEditor getLocEditor() {
-		return locEditor;
-	}
-
-	public void setLocEditor(LocationEditor locEditor) {
-		this.locEditor = locEditor;
 	}
 
 	public EditLocationPanel getEditLocationPanel() {

@@ -13,7 +13,6 @@ import javax.swing.event.TableModelEvent;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.AbstractTableModel;
 
-import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 import org.qualsh.lb.util.Utilities;
@@ -313,12 +312,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 					return "";
 				}
 			case COLUMN_NUM_LOCATION:
-				Location loc = log.getFullLocation();
-				if(loc != null) {
-					return loc.getLocationName();
-				} else {
-					return "";
-				}
+				Place txPlace = log.getFullTxPlace();
+				return txPlace != null ? txPlace.getPlaceName() : "";
 		}
 	}
 
