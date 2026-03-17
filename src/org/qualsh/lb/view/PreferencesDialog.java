@@ -12,6 +12,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
+import java.io.File;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -22,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
@@ -74,6 +77,7 @@ public class PreferencesDialog extends JDialog {
 	private JButton btnReset;
 	private LogInteraction logInteraction;
 	private JComboBox<String> themeComboBox;
+	private JTextField textDbPath;
 
 	public PreferencesDialog(JFrame frame) {
 		super(frame);
@@ -350,6 +354,73 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblThemeNote.gridy = 1;
 		themePanel.add(lblThemeNote, gbc_lblThemeNote);
 
+		// ── Tab 3: General ────────────────────────────────────────────────────
+		JPanel generalTab = new JPanel(new BorderLayout());
+		tabbedPane.addTab("General", generalTab);
+
+		JPanel dbPanel = new JPanel();
+		dbPanel.setBorder(new CompoundBorder(
+				new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null),
+						"Database", TitledBorder.LEADING, TitledBorder.TOP, null, null),
+				new EmptyBorder(10, 10, 10, 10)));
+		generalTab.add(dbPanel, BorderLayout.NORTH);
+
+		GridBagLayout gbl_dbPanel = new GridBagLayout();
+		gbl_dbPanel.columnWidths = new int[]{0, 0, 0, 0};
+		gbl_dbPanel.rowHeights = new int[]{0, 0, 0};
+		gbl_dbPanel.columnWeights = new double[]{0.0, 1.0, 0.0, Double.MIN_VALUE};
+		gbl_dbPanel.rowWeights = new double[]{0.0, 0.0, Double.MIN_VALUE};
+		dbPanel.setLayout(gbl_dbPanel);
+
+		JLabel lblDbPath = new JLabel("Database Path");
+		lblDbPath.setFont(new Font("Tahoma", Font.BOLD, 11));
+		GridBagConstraints gbc_lblDbPath = new GridBagConstraints();
+		gbc_lblDbPath.insets = new Insets(0, 0, 8, 10);
+		gbc_lblDbPath.gridx = 0;
+		gbc_lblDbPath.gridy = 0;
+		dbPanel.add(lblDbPath, gbc_lblDbPath);
+
+		textDbPath = new JTextField();
+		GridBagConstraints gbc_textDbPath = new GridBagConstraints();
+		gbc_textDbPath.fill = GridBagConstraints.HORIZONTAL;
+		gbc_textDbPath.insets = new Insets(0, 0, 8, 5);
+		gbc_textDbPath.gridx = 1;
+		gbc_textDbPath.gridy = 0;
+		dbPanel.add(textDbPath, gbc_textDbPath);
+
+		JButton btnBrowseDb = new JButton("Browse…");
+		GridBagConstraints gbc_btnBrowseDb = new GridBagConstraints();
+		gbc_btnBrowseDb.insets = new Insets(0, 0, 8, 0);
+		gbc_btnBrowseDb.gridx = 2;
+		gbc_btnBrowseDb.gridy = 0;
+		dbPanel.add(btnBrowseDb, gbc_btnBrowseDb);
+		btnBrowseDb.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				JFileChooser fc = new JFileChooser();
+				fc.setDialogTitle("Select Database File");
+				fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+				String current = textDbPath.getText().trim();
+				if (!current.isEmpty()) {
+					File f = new File(current);
+					fc.setCurrentDirectory(f.getParentFile() != null ? f.getParentFile() : f);
+					fc.setSelectedFile(f);
+				}
+				int result = fc.showOpenDialog(PreferencesDialog.this);
+				if (result == JFileChooser.APPROVE_OPTION) {
+					textDbPath.setText(fc.getSelectedFile().getAbsolutePath());
+				}
+			}
+		});
+
+		JLabel lblDbNote = new JLabel("A restart is required for the new database path to take effect.");
+		lblDbNote.setFont(new Font("Tahoma", Font.ITALIC, 10));
+		GridBagConstraints gbc_lblDbNote = new GridBagConstraints();
+		gbc_lblDbNote.anchor = GridBagConstraints.WEST;
+		gbc_lblDbNote.gridwidth = 3;
+		gbc_lblDbNote.gridx = 0;
+		gbc_lblDbNote.gridy = 1;
+		dbPanel.add(lblDbNote, gbc_lblDbNote);
+
 		// ── Save / Cancel buttons (shared across tabs) ────────────────────────
 		JPanel panel_3 = new JPanel();
 		outerPanel.add(panel_3, BorderLayout.SOUTH);
@@ -397,6 +468,14 @@ public class PreferencesDialog extends JDialog {
 				} else {
 					themeComboBox.setSelectedIndex(0); // System Default
 				}
+				// Initialize DB path field
+				java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(org.qualsh.lb.data.Data.class);
+				String savedDbPath = jPrefs.get("db_path", null);
+				if (savedDbPath != null && !savedDbPath.isBlank()) {
+					textDbPath.setText(savedDbPath);
+				} else {
+					textDbPath.setText(org.qualsh.lb.data.Data.getDbPath());
+				}
 			}
 
 			public void windowClosing(WindowEvent e) {
@@ -440,8 +519,25 @@ public class PreferencesDialog extends JDialog {
 	protected void save() {
 		this.saveMyPlace();
 		this.saveTheme();
+		this.saveDbPath();
 		if (logInteraction != null) {
 			logInteraction.getLocationsTab().refreshList();
+		}
+	}
+
+	private void saveDbPath() {
+		String path = textDbPath.getText().trim();
+		if (path.isEmpty()) return;
+		java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(org.qualsh.lb.data.Data.class);
+		String current = jPrefs.get("db_path", null);
+		if (!path.equals(current)) {
+			jPrefs.put("db_path", path);
+			JOptionPane.showMessageDialog(
+				this,
+				"Database path updated. Please restart the application for the change to take effect.",
+				"Restart Required",
+				JOptionPane.INFORMATION_MESSAGE
+			);
 		}
 	}
 
