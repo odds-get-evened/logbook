@@ -19,8 +19,15 @@ public class Data {
 	private static ArrayList<Station> stations = new ArrayList<Station>();
 
 	public Data() {
-		// set DB file name
-		setDbPath(System.getProperty("user.home") + System.getProperty("file.separator") + "LB" + System.getProperty("file.separator") + "lb.db");
+		// Check for a user-saved DB path in OS-level preferences (avoids chicken-and-egg with SQLite prefs)
+		java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(Data.class);
+		String savedDbPath = jPrefs.get("db_path", null);
+		if (savedDbPath != null && !savedDbPath.isBlank()) {
+			setDbPath(savedDbPath);
+		} else {
+			// set default DB file path
+			setDbPath(System.getProperty("user.home") + System.getProperty("file.separator") + "LB" + System.getProperty("file.separator") + "lb.db");
+		}
 		
 		langList();
 		
@@ -99,7 +106,7 @@ public class Data {
 		return connection;
 	}
 
-	private static void establishTables() {
+	public static void establishTables() {
 		establishLogsTable();
 		establishLanguagesTable();
 		establishStationsTable();

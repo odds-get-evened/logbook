@@ -13,6 +13,7 @@ public class Preferences {
 
 	public static final String PREF_NAME_MY_PLACE = "my_place";
 	public static final String PREF_NAME_THEME = "ui_theme";
+	public static final String PREF_NAME_DB_PATH = "db_path";
 
 	public Preferences() {
 		
