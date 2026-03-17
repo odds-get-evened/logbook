@@ -88,6 +88,7 @@ public class MapPanel extends JPanel {
 
     private LayerFilter activeLayer = LayerFilter.ALL_LOCATIONS;
     private LogMapWaypoint selectedWaypoint = null;
+    private Log selectedLog = null;
 
     private boolean pickingMode = false;
     private Consumer<GeoPosition> locationPickCallback = null;
@@ -283,6 +284,7 @@ public class MapPanel extends JPanel {
      * The selection highlight is shown regardless of the active layer.
      */
     public void highlightLog(Log log) {
+        selectedLog = log;
         selectedWaypoint = null;
         for (LogMapWaypoint wp : logEntryWaypoints) {
             if (wp.getLog() != null
@@ -302,6 +304,7 @@ public class MapPanel extends JPanel {
     /** Remove the current selection highlight. */
     public void clearSelection() {
         selectedWaypoint = null;
+        selectedLog = null;
         updatePainters();
     }
 
@@ -310,6 +313,8 @@ public class MapPanel extends JPanel {
      * Falls back to panning if only one position is available.
      */
     public void zoomToLogBounds(Log log) {
+        selectedLog = log;
+        updatePainters();
         Set<GeoPosition> positions = new HashSet<>();
         for (LogMapWaypoint wp : logEntryWaypoints) {
             if (wp.getLog() != null && wp.getLog().getId() == log.getId()) {
@@ -389,7 +394,10 @@ public class MapPanel extends JPanel {
                 // (-viewportBounds.x, -viewportBounds.y), so we use raw tile-pixel
                 // coordinates directly — no need to subtract the viewport origin.
                 Point2D p = map.getTileFactory().geoToPixel(wp.getPosition(), map.getZoom());
-                int size = (wp == selectedWaypoint) ? 16 : 12;
+                boolean isSelectedLog = selectedLog != null
+                        && wp.getLog() != null
+                        && wp.getLog().getId() == selectedLog.getId();
+                int size = isSelectedLog ? 16 : 12;
                 int x = (int) p.getX() - size / 2;
                 int y = (int) p.getY() - size / 2;
 
@@ -397,8 +405,8 @@ public class MapPanel extends JPanel {
                         RenderingHints.VALUE_ANTIALIAS_ON);
 
                 Color fill;
-                if (wp == selectedWaypoint) {
-                    fill = new Color(255, 140, 0);       // orange – selected
+                if (isSelectedLog) {
+                    fill = new Color(30, 160, 30);       // green – selected log
                 } else if (wp.getType() == LogMapWaypoint.Type.TX) {
                     fill = new Color(210, 40, 40);       // red – transmitter
                 } else {

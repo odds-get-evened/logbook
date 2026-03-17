@@ -118,7 +118,7 @@ public class LocationsTab extends JPanel {
 					// Filter logs table by this place
 					if (logsTable != null) {
 						LogsModel logModel = (LogsModel) logsTable.getModel();
-						logModel.setData(logModel.getLogsByMyPlace(selected.getId()));
+						logModel.setData(logModel.getLogsByLocation(selected.getId()));
 						logModel.fireTableDataChanged();
 						logsTable.clearSelection();
 					}
