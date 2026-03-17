@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 
 import org.qualsh.lb.data.LogsModel;
-import org.qualsh.lb.location.Location;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
 
@@ -29,9 +28,9 @@ public class ExportUtil {
 			sb.append(csvEscape(String.valueOf(log.getFrequency()))).append(',');
 			sb.append(csvEscape(log.getMode())).append(',');
 			sb.append(csvEscape(log.getDescription())).append(',');
-			Location txLoc = log.getFullLocation();
-			sb.append(csvEscape(txLoc != null ? txLoc.getStrLatitude() : "")).append(',');
-			sb.append(csvEscape(txLoc != null ? txLoc.getStrLongitude() : "")).append(',');
+			Place txPlace = log.getFullTxPlace();
+			sb.append(csvEscape(txPlace != null ? txPlace.getLatitude() : "")).append(',');
+			sb.append(csvEscape(txPlace != null ? txPlace.getLongitude() : "")).append(',');
 			Place rxPlace = log.getFullMyPlace();
 			sb.append(csvEscape(rxPlace != null ? rxPlace.getLatitude() : "")).append(',');
 			sb.append(csvEscape(rxPlace != null ? rxPlace.getLongitude() : "")).append(',');
@@ -59,7 +58,7 @@ public class ExportUtil {
 		for (int i = 0; i < logs.size(); i++) {
 			Log log = logs.get(i);
 			Place rxPlace = log.getFullMyPlace();
-			Location txLoc = log.getFullLocation();
+			Place txPlace = log.getFullTxPlace();
 			sb.append("  {\n");
 			sb.append("    \"id\": ").append(log.getId()).append(",\n");
 			sb.append("    \"date\": \"").append(jsonEscape(Utilities.unixTimestampToString(log.getDateOn(), "MM/dd/yyyy"))).append("\",\n");
@@ -76,15 +75,11 @@ public class ExportUtil {
 			} else {
 				sb.append("    \"rx_location\": null,\n");
 			}
-			if (txLoc != null) {
+			if (txPlace != null) {
 				sb.append("    \"tx_location\": {\n");
-				sb.append("      \"name\": \"").append(jsonEscape(txLoc.getLocationName())).append("\",\n");
-				sb.append("      \"lat\": \"").append(jsonEscape(txLoc.getStrLatitude())).append("\",\n");
-				sb.append("      \"lon\": \"").append(jsonEscape(txLoc.getStrLongitude())).append("\",\n");
-				sb.append("      \"frequency\": \"").append(jsonEscape(txLoc.getStrFrequency())).append("\",\n");
-				sb.append("      \"time_on\": \"").append(jsonEscape(txLoc.getStrTimeOn())).append("\",\n");
-				sb.append("      \"time_off\": \"").append(jsonEscape(txLoc.getStrTimeOff())).append("\",\n");
-				sb.append("      \"language\": \"").append(jsonEscape(txLoc.getLanguage())).append("\"\n");
+				sb.append("      \"name\": \"").append(jsonEscape(txPlace.getPlaceName())).append("\",\n");
+				sb.append("      \"lat\": \"").append(jsonEscape(txPlace.getLatitude())).append("\",\n");
+				sb.append("      \"lon\": \"").append(jsonEscape(txPlace.getLongitude())).append("\"\n");
 				sb.append("    },\n");
 			} else {
 				sb.append("    \"tx_location\": null,\n");
@@ -130,7 +125,7 @@ public class ExportUtil {
 
 		for (Log log : logs) {
 			Place rxPlace = log.getFullMyPlace();
-			Location txLoc = log.getFullLocation();
+			Place txPlace = log.getFullTxPlace();
 
 			// FREQ in MHz (ADIF uses MHz, log stores kHz)
 			double freqMhz = log.getFrequency() / 1000.0;
@@ -154,24 +149,17 @@ public class ExportUtil {
 			}
 
 			// TX location fields
-			if (txLoc != null) {
-				// STATION_CALLSIGN: TX station name
-				String txName = txLoc.getLocationName();
+			if (txPlace != null) {
+				String txName = txPlace.getPlaceName();
 				if (txName != null && !txName.isBlank()) {
 					sb.append(adifField("STATION_CALLSIGN", txName));
 				}
-				// QTH: TX location name
-				sb.append(adifField("QTH", txLoc.getLocationName() != null ? txLoc.getLocationName() : ""));
-				// TX coordinates
-				if (txLoc.getStrLatitude() != null && !txLoc.getStrLatitude().isBlank()) {
-					sb.append(adifField("LAT", decimalToAdifLatLon(txLoc.getStrLatitude(), true)));
+				sb.append(adifField("QTH", txName != null ? txName : ""));
+				if (txPlace.getLatitude() != null && !txPlace.getLatitude().isBlank()) {
+					sb.append(adifField("LAT", decimalToAdifLatLon(txPlace.getLatitude(), true)));
 				}
-				if (txLoc.getStrLongitude() != null && !txLoc.getStrLongitude().isBlank()) {
-					sb.append(adifField("LON", decimalToAdifLatLon(txLoc.getStrLongitude(), false)));
-				}
-				// Language
-				if (txLoc.getLanguage() != null && !txLoc.getLanguage().isBlank()) {
-					sb.append(adifField("NOTES", "Language: " + txLoc.getLanguage()));
+				if (txPlace.getLongitude() != null && !txPlace.getLongitude().isBlank()) {
+					sb.append(adifField("LON", decimalToAdifLatLon(txPlace.getLongitude(), false)));
 				}
 			}
 
