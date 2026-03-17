@@ -5,7 +5,12 @@ import org.qualsh.lb.data.Data;
 import org.qualsh.lb.util.Preferences;
 
 public class App {
-	public static final String VERSION = "0.0.7";
+	public static final String VERSION;
+
+	static {
+		String v = App.class.getPackage().getImplementationVersion();
+		VERSION = (v != null && !v.isEmpty()) ? v : "0.0.1";
+	}
 
 	public App() {}
 

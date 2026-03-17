@@ -68,6 +68,7 @@ public class PreferencesDialog extends JDialog {
 	private JButton btnSave;
 	private JButton btnCancel;
 	private JTextField textFindLocation;
+	private JTextField textName;
 	private JButton btnFindLocation;
 	private JLabel lblCurrentLocation;
 	private JButton btnReset;
@@ -111,9 +112,9 @@ public class PreferencesDialog extends JDialog {
 
 		GridBagLayout gbl_panel_1 = new GridBagLayout();
 		gbl_panel_1.columnWidths = new int[]{0, 0, 0};
-		gbl_panel_1.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0};
+		gbl_panel_1.rowHeights = new int[]{0, 0, 0, 0, 0, 0, 0, 0};
 		gbl_panel_1.columnWeights = new double[]{0.0, 1.0, Double.MIN_VALUE};
-		gbl_panel_1.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_panel_1.rowWeights = new double[]{0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
 		panel_1.setLayout(gbl_panel_1);
 
 		JLabel lblCurrentLocation_1 = new JLabel("Current location");
@@ -132,12 +133,29 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblCurrentLocation.gridy = 0;
 		panel_1.add(lblCurrentLocation, gbc_lblCurrentLocation);
 
+		JLabel lblName = new JLabel("Name");
+		lblName.setFont(new Font("Tahoma", Font.BOLD, 11));
+		GridBagConstraints gbc_lblName = new GridBagConstraints();
+		gbc_lblName.insets = new Insets(0, 0, 5, 5);
+		gbc_lblName.gridx = 0;
+		gbc_lblName.gridy = 1;
+		panel_1.add(lblName, gbc_lblName);
+
+		textName = new JTextField();
+		GridBagConstraints gbc_textName = new GridBagConstraints();
+		gbc_textName.fill = GridBagConstraints.HORIZONTAL;
+		gbc_textName.insets = new Insets(0, 0, 5, 0);
+		gbc_textName.gridx = 1;
+		gbc_textName.gridy = 1;
+		panel_1.add(textName, gbc_textName);
+		textName.setColumns(10);
+
 		JLabel lblFindLocation = new JLabel("Find location");
 		lblFindLocation.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblFindLocation = new GridBagConstraints();
 		gbc_lblFindLocation.insets = new Insets(0, 0, 5, 5);
 		gbc_lblFindLocation.gridx = 0;
-		gbc_lblFindLocation.gridy = 1;
+		gbc_lblFindLocation.gridy = 2;
 		panel_1.add(lblFindLocation, gbc_lblFindLocation);
 
 		JPanel panel_4 = new JPanel();
@@ -145,7 +163,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_panel_4.insets = new Insets(0, 0, 5, 0);
 		gbc_panel_4.fill = GridBagConstraints.BOTH;
 		gbc_panel_4.gridx = 1;
-		gbc_panel_4.gridy = 1;
+		gbc_panel_4.gridy = 2;
 		panel_1.add(panel_4, gbc_panel_4);
 		GridBagLayout gbl_panel_4 = new GridBagLayout();
 		gbl_panel_4.columnWidths = new int[]{0, 0, 0};
@@ -191,6 +209,9 @@ public class PreferencesDialog extends JDialog {
 							PreferencesDialog.this.getTextLatitude().setText(lat);
 							PreferencesDialog.this.getTextLongitude().setText(lon);
 							PreferencesDialog.this.getLblCurrentLocation().setText(shortName);
+							if (PreferencesDialog.this.getTextName().getText().trim().isEmpty()) {
+								PreferencesDialog.this.getTextName().setText(shortName);
+							}
 						});
 					} catch (Exception ex) {
 						SwingUtilities.invokeLater(() -> PreferencesDialog.this.getLblCurrentLocation().setText("Search failed"));
@@ -208,7 +229,7 @@ public class PreferencesDialog extends JDialog {
 		GridBagConstraints gbc_lblLatitude = new GridBagConstraints();
 		gbc_lblLatitude.insets = new Insets(0, 0, 5, 5);
 		gbc_lblLatitude.gridx = 0;
-		gbc_lblLatitude.gridy = 2;
+		gbc_lblLatitude.gridy = 3;
 		panel_1.add(lblLatitude, gbc_lblLatitude);
 
 		textLatitude = new CoordinateTextField();
@@ -216,7 +237,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_textLatitude.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textLatitude.insets = new Insets(0, 0, 5, 0);
 		gbc_textLatitude.gridx = 1;
-		gbc_textLatitude.gridy = 2;
+		gbc_textLatitude.gridy = 3;
 		panel_1.add(textLatitude, gbc_textLatitude);
 
 		JLabel lblLongitude = new JLabel("Longitude");
@@ -224,7 +245,7 @@ public class PreferencesDialog extends JDialog {
 		GridBagConstraints gbc_lblLongitude = new GridBagConstraints();
 		gbc_lblLongitude.insets = new Insets(0, 0, 5, 5);
 		gbc_lblLongitude.gridx = 0;
-		gbc_lblLongitude.gridy = 3;
+		gbc_lblLongitude.gridy = 4;
 		panel_1.add(lblLongitude, gbc_lblLongitude);
 
 		textLongitude = new CoordinateTextField();
@@ -232,7 +253,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_textLongitude.insets = new Insets(0, 0, 5, 0);
 		gbc_textLongitude.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textLongitude.gridx = 1;
-		gbc_textLongitude.gridy = 3;
+		gbc_textLongitude.gridy = 4;
 		panel_1.add(textLongitude, gbc_textLongitude);
 
 		// Pick from map button
@@ -242,7 +263,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_btnPickFromMap.anchor = GridBagConstraints.WEST;
 		gbc_btnPickFromMap.insets = new Insets(0, 0, 5, 0);
 		gbc_btnPickFromMap.gridx = 1;
-		gbc_btnPickFromMap.gridy = 4;
+		gbc_btnPickFromMap.gridy = 5;
 		panel_1.add(btnPickFromMap, gbc_btnPickFromMap);
 		btnPickFromMap.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -258,6 +279,9 @@ public class PreferencesDialog extends JDialog {
 							PreferencesDialog.this.getTextLatitude().setText(lat);
 							PreferencesDialog.this.getTextLongitude().setText(lon);
 							PreferencesDialog.this.getLblCurrentLocation().setText(lat + ", " + lon);
+							if (PreferencesDialog.this.getTextName().getText().trim().isEmpty()) {
+								PreferencesDialog.this.getTextName().setText(lat + ", " + lon);
+							}
 							PreferencesDialog.this.setVisible(true);
 						});
 					});
@@ -272,6 +296,7 @@ public class PreferencesDialog extends JDialog {
 				Preferences.remove(Preferences.PREF_NAME_MY_PLACE);
 				PreferencesDialog.this.getLblCurrentLocation().setText("No location set.");
 				PreferencesDialog.this.getTextFindLocation().setText("");
+				PreferencesDialog.this.getTextName().setText("");
 				PreferencesDialog.this.getTextLatitude().setText("");
 				PreferencesDialog.this.getTextLongitude().setText("");
 			}
@@ -279,7 +304,7 @@ public class PreferencesDialog extends JDialog {
 		GridBagConstraints gbc_btnReset = new GridBagConstraints();
 		gbc_btnReset.anchor = GridBagConstraints.EAST;
 		gbc_btnReset.gridx = 1;
-		gbc_btnReset.gridy = 5;
+		gbc_btnReset.gridy = 6;
 		panel_1.add(btnReset, gbc_btnReset);
 
 		// ── Tab 2: Appearance ─────────────────────────────────────────────────
@@ -356,6 +381,7 @@ public class PreferencesDialog extends JDialog {
 					int placeId = Integer.parseInt(pref);
 					Place place = Place.getOne(placeId);
 					PreferencesDialog.this.getLblCurrentLocation().setText(place.getPlaceName());
+					PreferencesDialog.this.getTextName().setText(place.getPlaceName());
 					PreferencesDialog.this.getTextLatitude().setText(place.getLatitude());
 					PreferencesDialog.this.getTextLongitude().setText(place.getLongitude());
 				}
@@ -422,10 +448,14 @@ public class PreferencesDialog extends JDialog {
 	private void saveMyPlace() {
 		if (!this.getTextLatitude().getText().isEmpty() &&
 				!this.getTextLongitude().getText().isEmpty()) {
+			String name = this.getTextName().getText().trim();
+			if (name.isEmpty()) {
+				name = this.getLblCurrentLocation().getText();
+			}
 			Place place = new Place();
 			place.setLatitude(this.getTextLatitude().getText());
 			place.setLongitude(this.getTextLongitude().getText());
-			place.setPlaceName(this.getLblCurrentLocation().getText());
+			place.setPlaceName(name);
 			int placeId = place.insert();
 			place.setId(placeId);
 			Preferences.saveMyPlace(place);
@@ -520,6 +550,14 @@ public class PreferencesDialog extends JDialog {
 
 	public void setLogInteraction(LogInteraction logInteraction) {
 		this.logInteraction = logInteraction;
+	}
+
+	public JTextField getTextName() {
+		return textName;
+	}
+
+	public void setTextName(JTextField textName) {
+		this.textName = textName;
 	}
 
 }
