@@ -2,6 +2,9 @@ package org.qualsh.lb.data;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -300,6 +303,33 @@ public class Data {
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
+		}
+	}
+
+	/**
+	 * Copies the current database file to newPath, updates the active path,
+	 * and persists the new path in OS-level preferences.
+	 * Returns true on success, false on failure.
+	 */
+	public static boolean migrateDatabase(String newPath) {
+		String currentPath = getDbPath();
+		if (currentPath.equals(newPath)) {
+			return true;
+		}
+		try {
+			java.nio.file.Path source = Paths.get(currentPath);
+			java.nio.file.Path target = Paths.get(newPath);
+			if (target.getParent() != null) {
+				Files.createDirectories(target.getParent());
+			}
+			Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+			setDbPath(newPath);
+			java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(Data.class);
+			jPrefs.put("db_path", newPath);
+			return true;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return false;
 		}
 	}
 
