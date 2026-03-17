@@ -4,16 +4,21 @@ import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.io.File;
 
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
 import javax.swing.event.MenuKeyEvent;
 import javax.swing.event.MenuKeyListener;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.qualsh.lb.MainWin;
+import org.qualsh.lb.util.ExportUtil;
 
 public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 	
@@ -125,9 +130,74 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 
 	public void setMenuFile(JMenu menuFile) {
 		this.menuFile = menuFile;
-		
+
+		// Export submenu
+		JMenu menuExport = new JMenu("Export…");
+		this.menuFile.add(menuExport);
+
+		JMenuItem menuItemExportCsv = new JMenuItem("CSV");
+		menuItemExportCsv.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				File f = chooseExportFile("csv", "CSV Files (*.csv)", "logbook_export.csv");
+				if (f == null) return;
+				try {
+					ExportUtil.exportCsv(f);
+					JOptionPane.showMessageDialog(getMainFrame(), "Exported successfully to:\n" + f.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+				} catch (Exception ex) {
+					JOptionPane.showMessageDialog(getMainFrame(), "Export failed: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+		});
+		menuExport.add(menuItemExportCsv);
+
+		JMenuItem menuItemExportJson = new JMenuItem("JSON");
+		menuItemExportJson.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				File f = chooseExportFile("json", "JSON Files (*.json)", "logbook_export.json");
+				if (f == null) return;
+				try {
+					ExportUtil.exportJson(f);
+					JOptionPane.showMessageDialog(getMainFrame(), "Exported successfully to:\n" + f.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+				} catch (Exception ex) {
+					JOptionPane.showMessageDialog(getMainFrame(), "Export failed: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+		});
+		menuExport.add(menuItemExportJson);
+
+		JMenuItem menuItemExportAdif = new JMenuItem("ADIF");
+		menuItemExportAdif.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				File f = chooseExportFile("adi", "ADIF Files (*.adi)", "logbook_export.adi");
+				if (f == null) return;
+				try {
+					ExportUtil.exportAdif(f);
+					JOptionPane.showMessageDialog(getMainFrame(), "Exported successfully to:\n" + f.getAbsolutePath(), "Export Complete", JOptionPane.INFORMATION_MESSAGE);
+				} catch (Exception ex) {
+					JOptionPane.showMessageDialog(getMainFrame(), "Export failed: " + ex.getMessage(), "Export Error", JOptionPane.ERROR_MESSAGE);
+				}
+			}
+		});
+		menuExport.add(menuItemExportAdif);
+
+		this.menuFile.addSeparator();
 		setMenuItemExit(new JMenuItem("Exit"));
 		this.menuFile.add(getMenuItemExit());
+	}
+
+	private File chooseExportFile(String ext, String desc, String defaultName) {
+		JFileChooser fc = new JFileChooser();
+		fc.setDialogTitle("Export Logs");
+		fc.setFileFilter(new FileNameExtensionFilter(desc, ext));
+		fc.setSelectedFile(new File(System.getProperty("user.home"), defaultName));
+		int result = fc.showSaveDialog(getMainFrame());
+		if (result != JFileChooser.APPROVE_OPTION) return null;
+		File f = fc.getSelectedFile();
+		// Append extension if missing
+		if (!f.getName().contains(".")) {
+			f = new File(f.getAbsolutePath() + "." + ext);
+		}
+		return f;
 	}
 
 	public JMenuItem getMenuItemExit() {

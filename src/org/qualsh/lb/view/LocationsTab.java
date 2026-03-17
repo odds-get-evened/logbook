@@ -16,8 +16,10 @@ import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
@@ -30,6 +32,7 @@ import javax.swing.event.ListSelectionListener;
 import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.data.ViewPlacesModel;
 import org.qualsh.lb.place.Place;
+import org.qualsh.lb.util.Preferences;
 
 /**
  * Locations tab — manages the user's own station locations (Places).
@@ -133,7 +136,7 @@ public class LocationsTab extends JPanel {
 			}
 		});
 
-		// Show all logs again on deselect via double-click on empty area
+		// Show all logs again on deselect via click on empty area; show context menu on right-click
 		placeList.addMouseListener(new MouseListener() {
 			public void mouseClicked(MouseEvent e) {
 				int index = placeList.locationToIndex(e.getPoint());
@@ -146,10 +149,44 @@ public class LocationsTab extends JPanel {
 					}
 				}
 			}
-			public void mousePressed(MouseEvent e) {}
-			public void mouseReleased(MouseEvent e) {}
+			public void mousePressed(MouseEvent e) {
+				maybeShowContextMenu(e);
+			}
+			public void mouseReleased(MouseEvent e) {
+				maybeShowContextMenu(e);
+			}
 			public void mouseEntered(MouseEvent e) {}
 			public void mouseExited(MouseEvent e) {}
+
+			private void maybeShowContextMenu(MouseEvent e) {
+				if (!e.isPopupTrigger()) return;
+				int index = placeList.locationToIndex(e.getPoint());
+				if (index < 0) return;
+				if (!placeList.getCellBounds(index, index).contains(e.getPoint())) return;
+				placeList.setSelectedIndex(index);
+				Place target = placesModel.getElementAt(index);
+
+				JPopupMenu popup = new JPopupMenu();
+				JMenuItem setDefaultItem = new JMenuItem("Set as Default Location");
+				setDefaultItem.addActionListener(ev -> {
+					Preferences.save(Preferences.PREF_NAME_DEFAULT_PLACE, String.valueOf(target.getId()));
+					placeList.repaint();
+				});
+				popup.add(setDefaultItem);
+
+				// Allow clearing the default if this one is already the default
+				String currentDefault = Preferences.getOne(Preferences.PREF_NAME_DEFAULT_PLACE);
+				if (currentDefault != null && currentDefault.equals(String.valueOf(target.getId()))) {
+					JMenuItem clearDefaultItem = new JMenuItem("Clear Default Location");
+					clearDefaultItem.addActionListener(ev -> {
+						Preferences.remove(Preferences.PREF_NAME_DEFAULT_PLACE);
+						placeList.repaint();
+					});
+					popup.add(clearDefaultItem);
+				}
+
+				popup.show(placeList, e.getX(), e.getY());
+			}
 		});
 
 		btnAdd.addActionListener(new ActionListener() {
@@ -254,7 +291,11 @@ public class LocationsTab extends JPanel {
 			JPanel pnl = new JPanel(new BorderLayout(0, 2));
 			pnl.setBorder(BorderFactory.createEmptyBorder(5, 8, 5, 8));
 
-			JLabel lblName = new JLabel(value.getPlaceName());
+			String defaultPref = Preferences.getOne(Preferences.PREF_NAME_DEFAULT_PLACE);
+			boolean isDefault = defaultPref != null && defaultPref.equals(String.valueOf(value.getId()));
+			String nameText = isDefault ? value.getPlaceName() + "  \u2605" : value.getPlaceName();
+
+			JLabel lblName = new JLabel(nameText);
 			lblName.setFont(new Font("Tahoma", Font.BOLD, 12));
 			pnl.add(lblName, BorderLayout.NORTH);
 
@@ -262,7 +303,8 @@ public class LocationsTab extends JPanel {
 			String lon = value.getLongitude();
 			String coords = (lat != null && lon != null && !lat.isBlank() && !lon.isBlank())
 				? lat + ", " + lon : "No coordinates";
-			JLabel lblCoords = new JLabel(coords);
+			String subText = isDefault ? coords + "  (default)" : coords;
+			JLabel lblCoords = new JLabel(subText);
 			lblCoords.setFont(new Font("Tahoma", Font.PLAIN, 11));
 			pnl.add(lblCoords, BorderLayout.SOUTH);
 
