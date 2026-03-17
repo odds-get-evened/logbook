@@ -78,6 +78,7 @@ public class PreferencesDialog extends JDialog {
 	private LogInteraction logInteraction;
 	private JComboBox<String> themeComboBox;
 	private JTextField textDbPath;
+	private JLabel lblCurrentDbPath;
 
 	public PreferencesDialog(JFrame frame) {
 		super(frame);
@@ -367,17 +368,36 @@ public class PreferencesDialog extends JDialog {
 
 		GridBagLayout gbl_dbPanel = new GridBagLayout();
 		gbl_dbPanel.columnWidths = new int[]{0, 0, 0, 0};
-		gbl_dbPanel.rowHeights = new int[]{0, 0, 0};
+		gbl_dbPanel.rowHeights = new int[]{0, 0, 0, 0};
 		gbl_dbPanel.columnWeights = new double[]{0.0, 1.0, 0.0, Double.MIN_VALUE};
-		gbl_dbPanel.rowWeights = new double[]{0.0, 0.0, Double.MIN_VALUE};
+		gbl_dbPanel.rowWeights = new double[]{0.0, 0.0, 0.0, Double.MIN_VALUE};
 		dbPanel.setLayout(gbl_dbPanel);
 
-		JLabel lblDbPath = new JLabel("Database Path");
+		JLabel lblCurrentDb = new JLabel("Current");
+		lblCurrentDb.setFont(new Font("Tahoma", Font.BOLD, 11));
+		GridBagConstraints gbc_lblCurrentDb = new GridBagConstraints();
+		gbc_lblCurrentDb.insets = new Insets(0, 0, 8, 10);
+		gbc_lblCurrentDb.gridx = 0;
+		gbc_lblCurrentDb.gridy = 0;
+		dbPanel.add(lblCurrentDb, gbc_lblCurrentDb);
+
+		lblCurrentDbPath = new JLabel();
+		lblCurrentDbPath.setFont(new Font("Tahoma", Font.PLAIN, 11));
+		GridBagConstraints gbc_lblCurrentDbPath = new GridBagConstraints();
+		gbc_lblCurrentDbPath.anchor = GridBagConstraints.WEST;
+		gbc_lblCurrentDbPath.fill = GridBagConstraints.HORIZONTAL;
+		gbc_lblCurrentDbPath.insets = new Insets(0, 0, 8, 0);
+		gbc_lblCurrentDbPath.gridwidth = 2;
+		gbc_lblCurrentDbPath.gridx = 1;
+		gbc_lblCurrentDbPath.gridy = 0;
+		dbPanel.add(lblCurrentDbPath, gbc_lblCurrentDbPath);
+
+		JLabel lblDbPath = new JLabel("Move to");
 		lblDbPath.setFont(new Font("Tahoma", Font.BOLD, 11));
 		GridBagConstraints gbc_lblDbPath = new GridBagConstraints();
 		gbc_lblDbPath.insets = new Insets(0, 0, 8, 10);
 		gbc_lblDbPath.gridx = 0;
-		gbc_lblDbPath.gridy = 0;
+		gbc_lblDbPath.gridy = 1;
 		dbPanel.add(lblDbPath, gbc_lblDbPath);
 
 		textDbPath = new JTextField();
@@ -385,19 +405,19 @@ public class PreferencesDialog extends JDialog {
 		gbc_textDbPath.fill = GridBagConstraints.HORIZONTAL;
 		gbc_textDbPath.insets = new Insets(0, 0, 8, 5);
 		gbc_textDbPath.gridx = 1;
-		gbc_textDbPath.gridy = 0;
+		gbc_textDbPath.gridy = 1;
 		dbPanel.add(textDbPath, gbc_textDbPath);
 
 		JButton btnBrowseDb = new JButton("Browse…");
 		GridBagConstraints gbc_btnBrowseDb = new GridBagConstraints();
 		gbc_btnBrowseDb.insets = new Insets(0, 0, 8, 0);
 		gbc_btnBrowseDb.gridx = 2;
-		gbc_btnBrowseDb.gridy = 0;
+		gbc_btnBrowseDb.gridy = 1;
 		dbPanel.add(btnBrowseDb, gbc_btnBrowseDb);
 		btnBrowseDb.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				JFileChooser fc = new JFileChooser();
-				fc.setDialogTitle("Select Database File");
+				fc.setDialogTitle("Migrate Database To…");
 				fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
 				String current = textDbPath.getText().trim();
 				if (!current.isEmpty()) {
@@ -405,20 +425,20 @@ public class PreferencesDialog extends JDialog {
 					fc.setCurrentDirectory(f.getParentFile() != null ? f.getParentFile() : f);
 					fc.setSelectedFile(f);
 				}
-				int result = fc.showOpenDialog(PreferencesDialog.this);
+				int result = fc.showSaveDialog(PreferencesDialog.this);
 				if (result == JFileChooser.APPROVE_OPTION) {
 					textDbPath.setText(fc.getSelectedFile().getAbsolutePath());
 				}
 			}
 		});
 
-		JLabel lblDbNote = new JLabel("A restart is required for the new database path to take effect.");
+		JLabel lblDbNote = new JLabel("Saving will copy your database to the new location immediately.");
 		lblDbNote.setFont(new Font("Tahoma", Font.ITALIC, 10));
 		GridBagConstraints gbc_lblDbNote = new GridBagConstraints();
 		gbc_lblDbNote.anchor = GridBagConstraints.WEST;
 		gbc_lblDbNote.gridwidth = 3;
 		gbc_lblDbNote.gridx = 0;
-		gbc_lblDbNote.gridy = 1;
+		gbc_lblDbNote.gridy = 2;
 		dbPanel.add(lblDbNote, gbc_lblDbNote);
 
 		// ── Save / Cancel buttons (shared across tabs) ────────────────────────
@@ -468,14 +488,10 @@ public class PreferencesDialog extends JDialog {
 				} else {
 					themeComboBox.setSelectedIndex(0); // System Default
 				}
-				// Initialize DB path field
-				java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(org.qualsh.lb.data.Data.class);
-				String savedDbPath = jPrefs.get("db_path", null);
-				if (savedDbPath != null && !savedDbPath.isBlank()) {
-					textDbPath.setText(savedDbPath);
-				} else {
-					textDbPath.setText(org.qualsh.lb.data.Data.getDbPath());
-				}
+				// Initialize DB path fields
+				String activeDbPath = org.qualsh.lb.data.Data.getDbPath();
+				lblCurrentDbPath.setText(activeDbPath);
+				textDbPath.setText(activeDbPath);
 			}
 
 			public void windowClosing(WindowEvent e) {
@@ -528,15 +544,24 @@ public class PreferencesDialog extends JDialog {
 	private void saveDbPath() {
 		String path = textDbPath.getText().trim();
 		if (path.isEmpty()) return;
-		java.util.prefs.Preferences jPrefs = java.util.prefs.Preferences.userNodeForPackage(org.qualsh.lb.data.Data.class);
-		String current = jPrefs.get("db_path", null);
-		if (!path.equals(current)) {
-			jPrefs.put("db_path", path);
+		String current = org.qualsh.lb.data.Data.getDbPath();
+		if (path.equals(current)) return;
+		boolean success = org.qualsh.lb.data.Data.migrateDatabase(path);
+		if (success) {
+			lblCurrentDbPath.setText(path);
 			JOptionPane.showMessageDialog(
 				this,
-				"Database path updated. Please restart the application for the change to take effect.",
-				"Restart Required",
+				"Database migrated to:\n" + path,
+				"Migration Complete",
 				JOptionPane.INFORMATION_MESSAGE
+			);
+		} else {
+			textDbPath.setText(current);
+			JOptionPane.showMessageDialog(
+				this,
+				"Failed to migrate database to the new location.\nThe original database is still in use.",
+				"Migration Failed",
+				JOptionPane.ERROR_MESSAGE
 			);
 		}
 	}
