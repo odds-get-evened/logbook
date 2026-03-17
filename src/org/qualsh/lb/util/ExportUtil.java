@@ -22,17 +22,20 @@ public class ExportUtil {
 	public static void exportCsv(File file) throws IOException {
 		ArrayList<Log> logs = new LogsModel().getLogList();
 		StringBuilder sb = new StringBuilder();
-		sb.append("Date,Time (UTC),Frequency (kHz),Mode,RX Location,Description,TX Location\n");
+		sb.append("Date,Time (UTC),Frequency (kHz),Mode,Description,TX Location Latitude,TX Location Longitude,RX Location Latitude,RX Location Longitude,Entered At\n");
 		for (Log log : logs) {
 			sb.append(csvEscape(Utilities.unixTimestampToString(log.getDateOn(), "MM/dd/yyyy"))).append(',');
 			sb.append(csvEscape(Utilities.unixTimestampToString(log.getDateOn(), "HH:mm"))).append(',');
 			sb.append(csvEscape(String.valueOf(log.getFrequency()))).append(',');
 			sb.append(csvEscape(log.getMode())).append(',');
-			Place rxPlace = log.getFullMyPlace();
-			sb.append(csvEscape(rxPlace != null ? rxPlace.getPlaceName() : "")).append(',');
 			sb.append(csvEscape(log.getDescription())).append(',');
 			Location txLoc = log.getFullLocation();
-			sb.append(csvEscape(txLoc != null ? txLoc.getLocationName() : "")).append('\n');
+			sb.append(csvEscape(txLoc != null ? txLoc.getStrLatitude() : "")).append(',');
+			sb.append(csvEscape(txLoc != null ? txLoc.getStrLongitude() : "")).append(',');
+			Place rxPlace = log.getFullMyPlace();
+			sb.append(csvEscape(rxPlace != null ? rxPlace.getLatitude() : "")).append(',');
+			sb.append(csvEscape(rxPlace != null ? rxPlace.getLongitude() : "")).append(',');
+			sb.append(csvEscape(log.getCreatedAt() != 0 ? Utilities.unixTimestampToString(log.getCreatedAt(), "MM/dd/yyyy HH:mm:ss") : "")).append('\n');
 		}
 		try (FileWriter fw = new FileWriter(file)) {
 			fw.write(sb.toString());
@@ -82,10 +85,12 @@ public class ExportUtil {
 				sb.append("      \"time_on\": \"").append(jsonEscape(txLoc.getStrTimeOn())).append("\",\n");
 				sb.append("      \"time_off\": \"").append(jsonEscape(txLoc.getStrTimeOff())).append("\",\n");
 				sb.append("      \"language\": \"").append(jsonEscape(txLoc.getLanguage())).append("\"\n");
-				sb.append("    }\n");
+				sb.append("    },\n");
 			} else {
-				sb.append("    \"tx_location\": null\n");
+				sb.append("    \"tx_location\": null,\n");
 			}
+			String enteredAt = log.getCreatedAt() != 0 ? Utilities.unixTimestampToString(log.getCreatedAt(), "MM/dd/yyyy HH:mm:ss") : "";
+			sb.append("    \"entered_at\": \"").append(jsonEscape(enteredAt)).append("\"\n");
 			sb.append("  }");
 			if (i < logs.size() - 1) sb.append(',');
 			sb.append('\n');
@@ -179,6 +184,11 @@ public class ExportUtil {
 				if (rxPlace.getLongitude() != null && !rxPlace.getLongitude().isBlank()) {
 					sb.append(adifField("MY_LON", decimalToAdifLatLon(rxPlace.getLongitude(), false)));
 				}
+			}
+
+			// Time the log entry was entered
+			if (log.getCreatedAt() != 0) {
+				sb.append(adifField("CREATED_TIMESTAMP", Utilities.unixTimestampToString(log.getCreatedAt(), "yyyyMMdd HHmmss")));
 			}
 
 			sb.append("<EOR>\n\n");

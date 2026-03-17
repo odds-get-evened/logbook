@@ -18,6 +18,7 @@ public class Log {
 	private String description;
 	private int location;
 	private int myPlace;
+	private int createdAt;
 
 	public Log() {
 		
@@ -194,6 +195,14 @@ public class Log {
 
 	public void setMyPlace(int myPlace) {
 		this.myPlace = myPlace;
+	}
+
+	public int getCreatedAt() {
+		return createdAt;
+	}
+
+	public void setCreatedAt(int createdAt) {
+		this.createdAt = createdAt;
 	}
 	
 	public String toString() {
