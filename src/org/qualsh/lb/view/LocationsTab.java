@@ -293,7 +293,7 @@ public class LocationsTab extends JPanel {
 
 			String defaultPref = Preferences.getOne(Preferences.PREF_NAME_DEFAULT_PLACE);
 			boolean isDefault = defaultPref != null && defaultPref.equals(String.valueOf(value.getId()));
-			String nameText = isDefault ? value.getPlaceName() + "  \u2605" : value.getPlaceName();
+			String nameText = value.getPlaceName();
 
 			JLabel lblName = new JLabel(nameText);
 			lblName.setFont(new Font("Tahoma", Font.BOLD, 12));
