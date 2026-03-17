@@ -142,7 +142,11 @@ public class Log {
 			ps = conn.prepareStatement("SELECT lang,lng,lat,time_off,time_on,frequency,location,station_id,id  FROM locations WHERE id = ?");
 			ps.setInt(1, this.getLocation());
 			rs = ps.executeQuery();
-			
+
+			if (!rs.next()) {
+				return null;
+			}
+
 			Location loc = new Location();
 			loc.setLanguage(rs.getString(Location.COLUMN_LANGUAGE));
 			loc.setId(rs.getInt(Location.COLUMN_ID));
