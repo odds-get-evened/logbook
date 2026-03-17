@@ -108,11 +108,29 @@ public class Data {
 
 	public static void establishTables() {
 		establishLogsTable();
+		migrateLogsAddCreatedAt();
 		establishLanguagesTable();
 		establishStationsTable();
 		establishLocationsTable();
 		establishPreferencesTable();
 		establishPlacesTable();
+	}
+
+	private static void migrateLogsAddCreatedAt() {
+		Connection conn = getConnection();
+		try {
+			Statement st = conn.createStatement();
+			st.executeUpdate("ALTER TABLE logs ADD COLUMN created_at INTEGER");
+			st.close();
+		} catch (SQLException e) {
+			// Column already exists — expected on existing databases
+		} finally {
+			try {
+				conn.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 	
 	private static void establishPlacesTable() {
@@ -272,7 +290,7 @@ public class Data {
 		Connection conn = getConnection();
 		try {
 			Statement st = conn.createStatement();
-			st.executeUpdate("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY NOT NULL, freq NUMERIC NOT NULL, mode TEXT NOT NULL, dateon INTEGER NOT NULL, description TEXT NOT NULL, location INTEGER, my_place INTEGER)");
+			st.executeUpdate("CREATE TABLE IF NOT EXISTS logs (id INTEGER PRIMARY KEY NOT NULL, freq NUMERIC NOT NULL, mode TEXT NOT NULL, dateon INTEGER NOT NULL, description TEXT NOT NULL, location INTEGER, my_place INTEGER, created_at INTEGER)");
 			st.close();
 		} catch (SQLException e) {
 			e.printStackTrace();

@@ -51,7 +51,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		ResultSet rs = null;
 		try {
 			st = db.createStatement();
-			rs = st.executeQuery("SELECT id, freq, mode, dateon, description, location, my_place FROM logs ORDER BY dateon DESC");
+			rs = st.executeQuery("SELECT id, freq, mode, dateon, description, location, my_place, created_at FROM logs ORDER BY dateon DESC");
 			while(rs.next()) {
 				Log log = new Log();
 				log.setId(rs.getInt("id"));
@@ -61,7 +61,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
-				
+				log.setCreatedAt(rs.getInt("created_at"));
+
 				logList.add(log);
 			}
 		} catch (SQLException e) {
@@ -72,30 +73,30 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				st.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				db.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		return logList;
 	}
-	
+
 	public void searchAll(String query) {
 		ArrayList<Log> results = new ArrayList<Log>();
 		Connection conn = Data.getConnection();
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try {
-			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place FROM logs WHERE freq LIKE ? OR description LIKE ? ORDER BY dateon DESC");
+			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place, created_at FROM logs WHERE freq LIKE ? OR description LIKE ? ORDER BY dateon DESC");
 			ps.setString(1, "%" + query.trim()  + "%");
 			ps.setString(2, "%" + query.trim() + "%");
 
@@ -109,6 +110,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
+				log.setCreatedAt(rs.getInt("created_at"));
 
 				results.add(log);
 			}
@@ -145,7 +147,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		ResultSet rs = null;
 		try {
 			st = conn.createStatement();
-			rs = st.executeQuery("SELECT id, freq, mode, dateon, description, location, my_place FROM logs ORDER BY " + order + " " + sort);
+			rs = st.executeQuery("SELECT id, freq, mode, dateon, description, location, my_place, created_at FROM logs ORDER BY " + order + " " + sort);
 			while(rs.next()) {
 				Log log = new Log();
 				log.setId(rs.getInt("id"));
@@ -155,7 +157,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
-				
+				log.setCreatedAt(rs.getInt("created_at"));
+
 				logList.add(log);
 			}
 		} catch (SQLException e) {
@@ -190,11 +193,11 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try {
-			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place FROM logs WHERE location LIKE ? ORDER BY dateon DESC");
+			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place, created_at FROM logs WHERE location LIKE ? ORDER BY dateon DESC");
 			ps.setInt(1, id);
-			
+
 			rs = ps.executeQuery();
-			
+
 			while(rs.next()) {
 				Log log = new Log();
 				log.setId(rs.getInt("id"));
@@ -204,7 +207,8 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
-				
+				log.setCreatedAt(rs.getInt("created_at"));
+
 				logList.add(log);
 			}
 		} catch (SQLException e) {
@@ -240,7 +244,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try {
-			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place FROM logs WHERE my_place = ? ORDER BY dateon DESC");
+			ps = conn.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place, created_at FROM logs WHERE my_place = ? ORDER BY dateon DESC");
 			ps.setInt(1, id);
 
 			rs = ps.executeQuery();
@@ -254,6 +258,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
+				log.setCreatedAt(rs.getInt("created_at"));
 				logList.add(log);
 			}
 		} catch (SQLException e) {
@@ -371,26 +376,29 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		Connection db = Data.getConnection();
 		PreparedStatement st = null;
 		try {
-			st = db.prepareStatement("INSERT INTO logs (freq, mode, dateon, description, location, my_place) VALUES (?, ?, ?, ?, ?, ?)");
+			st = db.prepareStatement("INSERT INTO logs (freq, mode, dateon, description, location, my_place, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
 			st.setFloat(1, log.getFrequency());
 			st.setString(2, log.getMode());
 			st.setInt(3, log.getDateOn());
 			st.setString(4, log.getDescription());
-			
+
 			// set station location
 			if(log.getLocation() == 0) {
 				st.setNull(5, Types.INTEGER);
 			} else {
 				st.setInt(5, log.getLocation());
 			}
-			
+
 			// add current user location
 			if(log.getMyPlace() != 0) {
 				st.setInt(6, log.getMyPlace());
 			} else {
 				st.setNull(6, Types.INTEGER);
 			}
-			
+
+			// record when the log entry was created
+			st.setInt(7, (int) (System.currentTimeMillis() / 1000L));
+
 			st.execute();
 			setData(getLogList());
 			fireTableDataChanged();
@@ -502,7 +510,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 		PreparedStatement ps = null;
 		ResultSet rs = null;
 		try {
-			ps = db.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place "
+			ps = db.prepareStatement("SELECT id, freq, mode, dateon, description, location, my_place, created_at "
 					+ "FROM logs "
 					+ "WHERE CAST(STRFTIME('%H', datetime(dateon, 'unixepoch')) AS INTEGER) = ?");
 			ps.setInt(1, hour);
@@ -518,6 +526,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				log.setMode(rs.getString("mode"));
 				log.setLocation(rs.getInt("location"));
 				log.setMyPlace(rs.getInt("my_place"));
+				log.setCreatedAt(rs.getInt("created_at"));
 
 				results.add(log);
 			}
