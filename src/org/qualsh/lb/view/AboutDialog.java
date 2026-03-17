@@ -19,6 +19,7 @@ import java.awt.Desktop;
 import java.awt.GridBagConstraints;
 import java.awt.Font;
 import java.awt.Insets;
+import java.time.Year;
 
 import org.jdesktop.swingx.JXLabel;
 
@@ -56,9 +57,9 @@ public class AboutDialog extends JDialog {
 		getContentPane().add(panel, BorderLayout.CENTER);
 		GridBagLayout gbl_panel = new GridBagLayout();
 		gbl_panel.columnWidths = new int[]{0, 0};
-		gbl_panel.rowHeights = new int[]{0, 0, 0, 0, 0, 0};
+		gbl_panel.rowHeights = new int[]{0, 0, 0, 0, 0};
 		gbl_panel.columnWeights = new double[]{1.0, Double.MIN_VALUE};
-		gbl_panel.rowWeights = new double[]{0.0, 1.0, 0.0, 0.0, 0.0, Double.MIN_VALUE};
+		gbl_panel.rowWeights = new double[]{0.0, 1.0, 0.0, 0.0, Double.MIN_VALUE};
 		panel.setLayout(gbl_panel);
 		
 		JLabel lblLogbook = new JLabel("Logbook " + App.VERSION);
@@ -80,7 +81,7 @@ public class AboutDialog extends JDialog {
 		gbc_labelDesc.gridy = 1;
 		panel.add(labelDesc, gbc_labelDesc);
 		
-		JLabel lblCopyright = new JLabel("©2014 Chris Walsh, KJ6BBS");
+		JLabel lblCopyright = new JLabel("\u00a9" + Year.now().getValue() + " Chris Walsh, KJ6BBS");
 		GridBagConstraints gbc_lblCopyright = new GridBagConstraints();
 		gbc_lblCopyright.insets = new Insets(0, 0, 5, 0);
 		gbc_lblCopyright.anchor = GridBagConstraints.WEST;
@@ -88,12 +89,11 @@ public class AboutDialog extends JDialog {
 		gbc_lblCopyright.gridy = 2;
 		panel.add(lblCopyright, gbc_lblCopyright);
 		
-		JButton btnVisit = new JButton("http://hflogbook.tumbler.com");
-		btnVisit.addActionListener(new ActionListener() {
+		JButton btnGitHub = new JButton("https://github.com/odds-get-evened/logbook");
+		btnGitHub.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				// add link to web page
 				try {
-					URI uri = new URI("http://hflogbook.tumblr.com");
+					URI uri = new URI("https://github.com/odds-get-evened/logbook");
 					Desktop dt = Desktop.getDesktop();
 					try {
 						dt.browse(uri);
@@ -105,36 +105,13 @@ public class AboutDialog extends JDialog {
 				}
 			}
 		});
-		btnVisit.setBorderPainted(false);
-		btnVisit.setForeground(Color.BLUE);
-		GridBagConstraints gbc_btnVisit = new GridBagConstraints();
-		gbc_btnVisit.insets = new Insets(0, 0, 5, 0);
-		gbc_btnVisit.gridx = 0;
-		gbc_btnVisit.gridy = 3;
-		panel.add(btnVisit, gbc_btnVisit);
-		
-		JButton btnDonate = new JButton("Donate to the cause!");
-		btnDonate.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				try {
-					URI uri = new URI("https://coinbase.com/checkouts/a81cdb45f3aa188cd25095b9668188fc?c=HFLOGBDONOR");
-					Desktop dt = Desktop.getDesktop();
-					try {
-						dt.browse(uri);
-					} catch (IOException e1) {
-						e1.printStackTrace();
-					}
-				} catch (URISyntaxException e1) {
-					e1.printStackTrace();
-				}
-			}
-		});
-		btnDonate.setBorderPainted(false);
-		btnDonate.setForeground(Color.BLUE);
-		GridBagConstraints gbc_btnDonate = new GridBagConstraints();
-		gbc_btnDonate.gridx = 0;
-		gbc_btnDonate.gridy = 4;
-		panel.add(btnDonate, gbc_btnDonate);
+		btnGitHub.setBorderPainted(false);
+		btnGitHub.setForeground(Color.BLUE);
+		GridBagConstraints gbc_btnGitHub = new GridBagConstraints();
+		gbc_btnGitHub.insets = new Insets(0, 0, 5, 0);
+		gbc_btnGitHub.gridx = 0;
+		gbc_btnGitHub.gridy = 3;
+		panel.add(btnGitHub, gbc_btnGitHub);
 		
 		
 	}

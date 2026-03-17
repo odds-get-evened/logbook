@@ -82,13 +82,7 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 		
 		setMenuTools(new JMenu("Tools"));
 		add(getMenuTools());
-		
-		setMenuStation(new JMenu("Station"));
-		getMenuTools().add(getMenuStation());
-		
-		setMenuLocation(new JMenu("Location"));
-		getMenuTools().add(getMenuLocation());
-		
+
 		this.setMenuHelp(new JMenu("Help"));
 		add(this.getMenuHelp());
 		
