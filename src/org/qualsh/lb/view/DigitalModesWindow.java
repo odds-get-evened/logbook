@@ -1,5 +1,6 @@
 package org.qualsh.lb.view;
 
+import org.qualsh.lb.App;
 import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.digital.*;
 import org.qualsh.lb.digital.WsjtxUdpListener.QsoLoggedMessage;
@@ -7,16 +8,22 @@ import org.qualsh.lb.digital.WsjtxUdpListener.StatusMessage;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.util.Preferences;
 
+import javax.sound.sampled.*;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.*;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * DigitalModesWindow – secondary JFrame for FT8 / FT4 / JS8Call operation.
@@ -84,6 +91,13 @@ public class DigitalModesWindow extends JFrame {
     /** May be null if the main window hasn't been set up yet. */
     private final LogsModel logsModel;
 
+    // ── Recording ─────────────────────────────────────────────────────────────
+
+    private JButton btnRecord;
+    private volatile boolean recording = false;
+    private ByteArrayOutputStream recordingBuffer;
+    private Consumer<byte[]> recordingListener;
+
     // ── Polling ───────────────────────────────────────────────────────────────
 
     private volatile boolean transmitting = false;
@@ -111,9 +125,23 @@ public class DigitalModesWindow extends JFrame {
             setLocationRelativeTo(null);
         }
 
+        setupIcons();
         buildUI();
         wireListeners();
         loadPrefsAndStart();
+    }
+
+    // ── Icon setup ────────────────────────────────────────────────────────────
+
+    private void setupIcons() {
+        List<Image> images = new ArrayList<>();
+        String[] sizes = {"/imgs/lb_16x16.png", "/imgs/lb_32x32.png",
+                          "/imgs/lb_48x48.png", "/imgs/lb_128x128.png"};
+        for (String path : sizes) {
+            java.net.URL url = App.class.getResource(path);
+            if (url != null) images.add(Toolkit.getDefaultToolkit().getImage(url));
+        }
+        if (!images.isEmpty()) setIconImages(images);
     }
 
     // ── UI construction ───────────────────────────────────────────────────────
@@ -227,6 +255,18 @@ public class DigitalModesWindow extends JFrame {
         lblPlaybackStatus = statusDot("Playback");
         sb.add(lblCaptureStatus);
         sb.add(lblPlaybackStatus);
+
+        sb.add(new JSeparator(JSeparator.VERTICAL));
+
+        btnRecord = new JButton("\u25CF Record");
+        btnRecord.setToolTipText("Record incoming audio to a WAV file");
+        btnRecord.addActionListener(e -> onToggleRecording());
+        sb.add(btnRecord);
+
+        JButton btnUpload = new JButton("\u25B2 Upload Audio\u2026");
+        btnUpload.setToolTipText("Upload an audio file and play it to WSJT-X for decoding");
+        btnUpload.addActionListener(e -> onUploadAudio());
+        sb.add(btnUpload);
 
         return sb;
     }
@@ -351,6 +391,109 @@ public class DigitalModesWindow extends JFrame {
             final boolean tx = transmitting;
             SwingUtilities.invokeLater(() -> updatePttButton(tx));
         }, "DigitalModesWin-ptt").start();
+    }
+
+    private void onToggleRecording() {
+        if (!recording) {
+            // Start recording
+            recordingBuffer = new ByteArrayOutputStream();
+            recordingListener = chunk -> {
+                synchronized (DigitalModesWindow.this) {
+                    if (recording && recordingBuffer != null) {
+                        try { recordingBuffer.write(chunk); } catch (IOException ignored) {}
+                    }
+                }
+            };
+            AudioRouter.getInstance().addCaptureListener(recordingListener);
+            recording = true;
+            btnRecord.setText("\u25A0 Stop Recording");
+            btnRecord.setForeground(Color.RED);
+        } else {
+            // Stop recording and save file
+            recording = false;
+            AudioRouter.getInstance().removeCaptureListener(recordingListener);
+            recordingListener = null;
+            byte[] pcmData;
+            synchronized (this) {
+                pcmData = (recordingBuffer != null) ? recordingBuffer.toByteArray() : new byte[0];
+                recordingBuffer = null;
+            }
+            btnRecord.setText("\u25CF Record");
+            btnRecord.setForeground(null);
+            if (pcmData.length == 0) {
+                JOptionPane.showMessageDialog(this, "No audio was captured.", "Recording", JOptionPane.INFORMATION_MESSAGE);
+                return;
+            }
+            JFileChooser fc = new JFileChooser();
+            fc.setDialogTitle("Save Recording As");
+            fc.setFileFilter(new FileNameExtensionFilter("WAV audio (*.wav)", "wav"));
+            fc.setSelectedFile(new File("recording.wav"));
+            if (fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                File f = fc.getSelectedFile();
+                if (!f.getName().toLowerCase().endsWith(".wav")) f = new File(f.getPath() + ".wav");
+                final byte[] data = pcmData;
+                final File target = f;
+                new Thread(() -> {
+                    try (AudioInputStream ais = new AudioInputStream(
+                            new ByteArrayInputStream(data),
+                            AudioRouter.FORMAT,
+                            data.length / AudioRouter.FORMAT.getFrameSize())) {
+                        AudioSystem.write(ais, AudioFileFormat.Type.WAVE, target);
+                        SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(DigitalModesWindow.this,
+                                "Saved: " + target.getAbsolutePath(), "Recording Saved",
+                                JOptionPane.INFORMATION_MESSAGE));
+                    } catch (IOException ex) {
+                        SwingUtilities.invokeLater(() ->
+                            JOptionPane.showMessageDialog(DigitalModesWindow.this,
+                                "Failed to save: " + ex.getMessage(), "Recording Error",
+                                JOptionPane.ERROR_MESSAGE));
+                    }
+                }, "DigitalModesWin-saveWav").start();
+            }
+        }
+    }
+
+    private void onUploadAudio() {
+        JFileChooser fc = new JFileChooser();
+        fc.setDialogTitle("Upload Audio File for Decoding");
+        fc.setFileFilter(new FileNameExtensionFilter(
+                "Audio files (*.wav, *.mp3, *.ogg, *.flac)", "wav", "mp3", "ogg", "flac"));
+        if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+        File file = fc.getSelectedFile();
+        new Thread(() -> {
+            try {
+                AudioInputStream rawStream = AudioSystem.getAudioInputStream(file);
+                AudioFormat srcFormat = rawStream.getFormat();
+                AudioInputStream pcmStream;
+                // Convert to the required PCM format if needed
+                if (!srcFormat.matches(AudioRouter.FORMAT)) {
+                    pcmStream = AudioSystem.getAudioInputStream(AudioRouter.FORMAT, rawStream);
+                } else {
+                    pcmStream = rawStream;
+                }
+                byte[] buf = new byte[2048];
+                int read;
+                SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(DigitalModesWindow.this,
+                        "Playing \"" + file.getName() + "\" to the playback device.\n" +
+                        "Ensure WSJT-X is listening on that audio input to decode.",
+                        "Audio Upload", JOptionPane.INFORMATION_MESSAGE));
+                while ((read = pcmStream.read(buf)) != -1) {
+                    if (read > 0) {
+                        byte[] chunk = new byte[read];
+                        System.arraycopy(buf, 0, chunk, 0, read);
+                        AudioRouter.getInstance().play(chunk);
+                    }
+                }
+                pcmStream.close();
+            } catch (UnsupportedAudioFileException | IOException ex) {
+                SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(DigitalModesWindow.this,
+                        "Could not read audio file:\n" + ex.getMessage(),
+                        "Audio Upload Error", JOptionPane.ERROR_MESSAGE));
+            }
+        }, "DigitalModesWin-uploadAudio").start();
     }
 
     // ── WSJT-X callbacks ──────────────────────────────────────────────────────
