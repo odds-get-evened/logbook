@@ -381,7 +381,7 @@ public class PreferencesDialog extends JDialog {
 		gbc_lblCurrentDb.gridy = 0;
 		dbPanel.add(lblCurrentDb, gbc_lblCurrentDb);
 
-		lblCurrentDbPath = new JLabel();
+		lblCurrentDbPath = new JLabel(org.qualsh.lb.data.Data.getDbPath() != null ? org.qualsh.lb.data.Data.getDbPath() : "");
 		lblCurrentDbPath.setFont(new Font("Tahoma", Font.PLAIN, 11));
 		GridBagConstraints gbc_lblCurrentDbPath = new GridBagConstraints();
 		gbc_lblCurrentDbPath.anchor = GridBagConstraints.WEST;
