@@ -122,8 +122,19 @@ public class DigitalModesWindow extends JFrame {
 
     // ── File playback ─────────────────────────────────────────────────────────
 
-    private volatile boolean playingFile = false;
-    private JButton btnStopPlayback;
+    private volatile boolean playingFile    = false;
+    private volatile boolean playbackPaused = false;
+    private volatile boolean loopPlayback   = false;
+
+    /** PCM byte array of the currently loaded audio file; null when no file is cached. */
+    private volatile byte[] cachedAudioPcm  = null;
+    private String cachedAudioFileName      = null;
+
+    private JButton       btnPlayPause;
+    private JToggleButton btnLoop;
+    private JButton       btnReset;
+    private JLabel        lblAudioFile;
+    private JButton       btnStopPlayback;
 
     // ── Current dial frequency (kHz) for tune-to-selected ────────────────────
 
@@ -312,7 +323,7 @@ public class DigitalModesWindow extends JFrame {
     }
 
     private JPanel buildStatusBar() {
-        JPanel sb = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 3));
+        JPanel sb = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 3));
 
         btnPtt = new JButton("PTT: RX");
         btnPtt.setForeground(new Color(0, 120, 0));
@@ -334,17 +345,46 @@ public class DigitalModesWindow extends JFrame {
         btnRecord.addActionListener(e -> onToggleRecording());
         sb.add(btnRecord);
 
-        JButton btnUpload = new JButton("\u25B2 Upload Audio\u2026");
-        btnUpload.setToolTipText("Upload an audio file and play it to WSJT-X for decoding (also shown in waterfall)");
+        sb.add(new JSeparator(JSeparator.VERTICAL));
+
+        // Audio file playback controls
+        JButton btnUpload = new JButton("\u25B2 Upload\u2026");
+        btnUpload.setToolTipText("Load an audio file for playback (replaces any cached file)");
         btnUpload.addActionListener(e -> onUploadAudio());
         sb.add(btnUpload);
 
-        btnStopPlayback = new JButton("\u25A0 Stop Playback");
-        btnStopPlayback.setToolTipText("Stop the currently playing audio file");
+        lblAudioFile = new JLabel("No file");
+        lblAudioFile.setFont(lblAudioFile.getFont().deriveFont(11f));
+        lblAudioFile.setForeground(Color.GRAY);
+        sb.add(lblAudioFile);
+
+        btnPlayPause = new JButton("\u25B6 Play");
+        btnPlayPause.setToolTipText("Play / pause the cached audio file");
+        btnPlayPause.setVisible(false);
+        btnPlayPause.addActionListener(e -> onTogglePlayPause());
+        sb.add(btnPlayPause);
+
+        btnLoop = new JToggleButton("\u21BA Loop");
+        btnLoop.setToolTipText("Toggle loop / one-shot playback");
+        btnLoop.setVisible(false);
+        btnLoop.addActionListener(e -> loopPlayback = btnLoop.isSelected());
+        sb.add(btnLoop);
+
+        btnStopPlayback = new JButton("\u25A0 Stop");
+        btnStopPlayback.setToolTipText("Stop playback");
         btnStopPlayback.setForeground(Color.RED);
         btnStopPlayback.setVisible(false);
-        btnStopPlayback.addActionListener(e -> playingFile = false);
+        btnStopPlayback.addActionListener(e -> {
+            playingFile = false;
+            playbackPaused = false;
+        });
         sb.add(btnStopPlayback);
+
+        btnReset = new JButton("\u2715 Reset");
+        btnReset.setToolTipText("Clear the cached audio file");
+        btnReset.setVisible(false);
+        btnReset.addActionListener(e -> onResetAudio());
+        sb.add(btnReset);
 
         return sb;
     }
@@ -577,25 +617,17 @@ public class DigitalModesWindow extends JFrame {
     }
 
     private void onUploadAudio() {
-        if (playingFile) {
-            // Stop current playback instead of opening another file
-            playingFile = false;
-            return;
-        }
-
         JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("Upload Audio File for Decoding");
+        fc.setDialogTitle("Load Audio File for Playback");
         fc.setFileFilter(new FileNameExtensionFilter(
                 "Audio files (*.wav, *.mp3, *.ogg, *.flac)", "wav", "mp3", "ogg", "flac"));
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
 
         File file = fc.getSelectedFile();
-        playingFile = true;
 
-        SwingUtilities.invokeLater(() -> {
-            btnStopPlayback.setVisible(true);
-            revalidate();
-        });
+        // Stop any running playback so the load thread can safely replace the cache
+        playingFile = false;
+        playbackPaused = false;
 
         new Thread(() -> {
             try {
@@ -608,41 +640,115 @@ public class DigitalModesWindow extends JFrame {
                     pcmStream = rawStream;
                 }
 
-                SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(DigitalModesWindow.this,
-                        "Playing \u201c" + file.getName() + "\u201d to the playback device.\n" +
-                        "The waterfall will display the file\u2019s spectrum.\n" +
-                        "Ensure WSJT-X is listening on that audio input to decode.\n" +
-                        "Click \u201cStop Playback\u201d in the toolbar to cancel.",
-                        "Audio Playback", JOptionPane.INFORMATION_MESSAGE));
-
-                byte[] buf = new byte[AudioRouter.FORMAT.getFrameSize() * 512]; // ~5 ms chunks
+                // Read entire file into memory so it can be replayed without re-uploading
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                byte[] buf = new byte[4096];
                 int read;
-                AudioRouter router = AudioRouter.getInstance();
-                while (playingFile && (read = pcmStream.read(buf)) != -1) {
-                    if (read > 0) {
-                        byte[] chunk = new byte[read];
-                        System.arraycopy(buf, 0, chunk, 0, read);
-                        // Send to playback device (WSJT-X receives it)
-                        router.play(chunk);
-                        // Also feed the waterfall so the spectrum is visible
-                        if (waterfallPanel != null) waterfallPanel.feedPcm(chunk);
-                    }
+                while ((read = pcmStream.read(buf)) != -1) {
+                    baos.write(buf, 0, read);
                 }
                 pcmStream.close();
+
+                final byte[] pcmData  = baos.toByteArray();
+                final String fileName = file.getName();
+
+                SwingUtilities.invokeLater(() -> {
+                    cachedAudioPcm      = pcmData;
+                    cachedAudioFileName = fileName;
+                    updateAudioControls();
+                    startPlayback();
+                });
             } catch (UnsupportedAudioFileException | IOException ex) {
                 SwingUtilities.invokeLater(() ->
                     JOptionPane.showMessageDialog(DigitalModesWindow.this,
                         "Could not read audio file:\n" + ex.getMessage(),
-                        "Audio Playback Error", JOptionPane.ERROR_MESSAGE));
+                        "Audio Load Error", JOptionPane.ERROR_MESSAGE));
+            }
+        }, "DigitalModesWin-loadAudio").start();
+    }
+
+    /** Start playback from the cached PCM buffer; no-op if already playing or nothing cached. */
+    private void startPlayback() {
+        final byte[] pcm = cachedAudioPcm;
+        if (pcm == null || playingFile) return;
+
+        playingFile = true;
+        playbackPaused = false;
+        updateAudioControls();
+
+        new Thread(() -> {
+            AudioRouter router = AudioRouter.getInstance();
+            try {
+                do {
+                    InputStream src = new ByteArrayInputStream(pcm);
+                    byte[] buf = new byte[AudioRouter.FORMAT.getFrameSize() * 512]; // ~5 ms chunks
+                    int read;
+                    while (playingFile) {
+                        if (playbackPaused) {
+                            try { Thread.sleep(50); } catch (InterruptedException ie) { break; }
+                            continue;
+                        }
+                        read = src.read(buf);
+                        if (read == -1) break; // end of stream
+                        if (read > 0) {
+                            byte[] chunk = new byte[read];
+                            System.arraycopy(buf, 0, chunk, 0, read);
+                            router.play(chunk);
+                            if (waterfallPanel != null) waterfallPanel.feedPcm(chunk);
+                        }
+                    }
+                    // If still "playing" (not stopped), check loop flag
+                } while (playingFile && loopPlayback && cachedAudioPcm == pcm);
             } finally {
                 playingFile = false;
                 SwingUtilities.invokeLater(() -> {
-                    btnStopPlayback.setVisible(false);
-                    revalidate();
+                    playbackPaused = false;
+                    updateAudioControls();
                 });
             }
-        }, "DigitalModesWin-uploadAudio").start();
+        }, "DigitalModesWin-playback").start();
+    }
+
+    private void onTogglePlayPause() {
+        if (!playingFile) {
+            startPlayback();
+        } else {
+            playbackPaused = !playbackPaused;
+            updateAudioControls();
+        }
+    }
+
+    private void onResetAudio() {
+        playingFile = false;
+        playbackPaused = false;
+        cachedAudioPcm = null;
+        cachedAudioFileName = null;
+        updateAudioControls();
+    }
+
+    /** Refresh the audio playback control visibility/labels to match current state. Must be on EDT. */
+    private void updateAudioControls() {
+        boolean hasCached = (cachedAudioPcm != null);
+        boolean isPlaying = playingFile;
+        boolean isPaused  = playbackPaused;
+
+        if (hasCached) {
+            lblAudioFile.setText(cachedAudioFileName);
+            lblAudioFile.setForeground(UIManager.getColor("Label.foreground"));
+        } else {
+            lblAudioFile.setText("No file");
+            lblAudioFile.setForeground(Color.GRAY);
+        }
+
+        btnPlayPause.setVisible(hasCached);
+        btnPlayPause.setText((isPlaying && !isPaused) ? "|| Pause" : "\u25B6 Play");
+
+        btnLoop.setVisible(hasCached);
+
+        btnStopPlayback.setVisible(isPlaying);
+        btnReset.setVisible(hasCached && !isPlaying);
+
+        revalidate();
     }
 
     // ── WSJT-X callbacks ──────────────────────────────────────────────────────
@@ -797,7 +903,8 @@ public class DigitalModesWindow extends JFrame {
     /** Register a JVM shutdown hook to stop audio + UDP. */
     public void registerShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            playingFile = false;
+            playingFile    = false;
+            playbackPaused = false;
             if (waterfallCaptureListener != null) {
                 AudioRouter.getInstance().removeCaptureListener(waterfallCaptureListener);
             }
