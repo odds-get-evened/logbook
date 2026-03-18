@@ -30,6 +30,14 @@ public class Preferences {
 	public static final String PREF_DX_CLUSTER_PORT        = "dx_cluster_port";        // default 7300
 	public static final String PREF_DX_CLUSTER_CALLSIGN    = "dx_cluster_callsign";    // login callsign
 
+	// Digital modes
+	public static final String PREF_DIGITAL_PTT_METHOD        = "digital_ptt_method";        // VOX | RTS | DTR | CAT
+	public static final String PREF_DIGITAL_PTT_PORT          = "digital_ptt_port";          // serial port for RTS/DTR PTT
+	public static final String PREF_DIGITAL_CAPTURE_DEVICE    = "digital_capture_device";    // javax.sound mixer name
+	public static final String PREF_DIGITAL_PLAYBACK_DEVICE   = "digital_playback_device";   // javax.sound mixer name
+	public static final String PREF_DIGITAL_WSJTX_UDP_PORT    = "digital_wsjtx_udp_port";    // default 2237
+	public static final String PREF_DIGITAL_JS8CALL_UDP_PORT  = "digital_js8call_udp_port";  // default 2242
+
 	public Preferences() {
 		
 	}
