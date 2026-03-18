@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+}
+
+group = 'org.qualsh'
+version = '0.0.2'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+            exclude '**/*Test.java'
+        }
+        resources {
+            srcDirs = ['src']
+            exclude '**/*.java'
+        }
+    }
+    test {
+        java {
+            srcDirs = ['src/test/java']
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'com.formdev:flatlaf:3.5.1'
+    implementation 'com.googlecode.json-simple:json-simple:1.1'
+    implementation 'org.swinglabs:swingx:1.6.1'
+    implementation 'net.java.dev.glazedlists:glazedlists_java15:1.9.0'
+    implementation 'com.jgoodies:forms:1.2.1'
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'org.slf4j:slf4j-simple:1.7.36'
+    implementation 'org.jxmapviewer:jxmapviewer2:2.6'
+    implementation 'com.fazecast:jSerialComm:2.10.4'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+}
+
+test {
+    useJUnitPlatform()
+    jvmArgs '-Djava.awt.headless=true'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        showStandardStreams = false
+    }
+}
