@@ -33,6 +33,12 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      - name: Set version from tag
+        run: |
+          TAG=${{ github.event.inputs.tag || github.ref_name }}
+          VERSION=${TAG#v}
+          mvn versions:set -DnewVersion=$VERSION -DgenerateBackupPoms=false
+
       - name: Build fat JAR with Maven
         run: mvn clean package -DskipTests
 

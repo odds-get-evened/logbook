@@ -9,7 +9,7 @@ public class App {
 
 	static {
 		String v = App.class.getPackage().getImplementationVersion();
-		VERSION = (v != null && !v.isEmpty()) ? v : "0.0.1";
+		VERSION = (v != null && !v.isEmpty()) ? v : "dev";
 	}
 
 	public App() {}
