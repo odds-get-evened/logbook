@@ -18,6 +18,7 @@ import javax.swing.event.MenuKeyListener;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
 import org.qualsh.lb.MainWin;
+import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.util.ExportUtil;
 
 public class LogMenuBar extends JMenuBar implements MenuKeyListener {
@@ -35,6 +36,8 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 	private JMenuItem menuItemPreferences;
 	protected PreferencesDialog prefDialog;
 	protected AboutDialog aboutDialog;
+	private LogsModel logsModel;
+	private DigitalModesWindow digitalModesWindow;
 	
 	public AboutDialog getAboutDialog() {
 		return aboutDialog;
@@ -104,6 +107,24 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 			}
 		});
 		menuTools.add(menuItemDxSettings);
+
+		menuTools.addSeparator();
+
+		JMenuItem menuItemDigitalModes = new JMenuItem("Digital Modes Window\u2026");
+		menuItemDigitalModes.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_D,
+				Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
+		menuItemDigitalModes.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				if (digitalModesWindow == null) {
+					digitalModesWindow = new DigitalModesWindow(
+							(JFrame) LogMenuBar.this.getMainFrame(), logsModel);
+					digitalModesWindow.registerShutdownHook();
+				}
+				digitalModesWindow.setVisible(true);
+				digitalModesWindow.toFront();
+			}
+		});
+		menuTools.add(menuItemDigitalModes);
 
 		this.setMenuHelp(new JMenu("Help"));
 		add(this.getMenuHelp());
@@ -327,6 +348,14 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 
 	public void setPrefDialog(PreferencesDialog prefDialog) {
 		this.prefDialog = prefDialog;
+	}
+
+	public void setLogsModel(LogsModel logsModel) {
+		this.logsModel = logsModel;
+	}
+
+	public LogsModel getLogsModel() {
+		return logsModel;
 	}
 
 }

@@ -126,6 +126,9 @@ public class MainWin extends JFrame {
 		mapPanel.plotLogs(logsModel.getData());
 		logsModel.addTableModelListener(e -> mapPanel.plotLogs(logsModel.getData()));
 
+		// Make logsModel available to the Digital Modes window for auto-logging
+		this.getLogMenuBar().setLogsModel(logsModel);
+
 		// Load all locations/places from DB for the "All Stations" layer
 		ViewLocationsModel allLocModel = new ViewLocationsModel();
 		allLocModel.setAllLocations();
