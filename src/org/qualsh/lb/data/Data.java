@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 
+import org.qualsh.lb.dx.DXClusterServer;
 import org.qualsh.lb.language.Language;
 import org.qualsh.lb.station.Station;
 
@@ -20,6 +21,7 @@ public class Data {
 	private static String dbPath;
 	private static ArrayList<Language> languages = new ArrayList<Language>();
 	private static ArrayList<Station> stations = new ArrayList<Station>();
+	private static ArrayList<DXClusterServer> dxClusterServers = new ArrayList<DXClusterServer>();
 
 	public Data() {
 		// Check for a user-saved DB path in OS-level preferences (avoids chicken-and-egg with SQLite prefs)
@@ -33,8 +35,10 @@ public class Data {
 		}
 		
 		langList();
-		
+
 		stationsList();
+
+		dxClusterServersList();
 		
 		// create DB file if it doesn't exist
 		File f = new File(getDbPath());
@@ -92,6 +96,68 @@ public class Data {
 		getStations().add(new Station("wwcr", "WWCR"));
 	}
 
+	private void dxClusterServersList() {
+		getDXClusterServers().add(new DXClusterServer("VE7CC",    "dxc.ve7cc.net",      7300, "Vancouver, Canada",       49.2827, -123.1207));
+		getDXClusterServers().add(new DXClusterServer("W3LPL",    "w3lpl.net",           7373, "Maryland, USA",           39.0458,  -76.6413));
+		getDXClusterServers().add(new DXClusterServer("K1TTT",    "k1ttt.net",           7373, "Massachusetts, USA",      42.3601,  -71.0589));
+		getDXClusterServers().add(new DXClusterServer("NC7J",     "dxc.nc7j.com",        7373, "Utah, USA",               40.7608, -111.8910));
+		getDXClusterServers().add(new DXClusterServer("WA9PIE-2", "hrd.wa9pie.net",      8000, "Texas, USA",              31.9686,  -99.9018));
+		getDXClusterServers().add(new DXClusterServer("PI4CC",    "dxc.pi4cc.nl",        8000, "Rotterdam, Netherlands",  51.9225,    4.4792));
+		getDXClusterServers().add(new DXClusterServer("DA0BCC",   "dx.da0bcc.de",        7300, "Munich, Germany",         48.1351,   11.5820));
+		getDXClusterServers().add(new DXClusterServer("OH2AQ",    "dxc.oh2aq.fi",        7300, "Espoo, Finland",          60.2055,   24.6559));
+		getDXClusterServers().add(new DXClusterServer("G6NHU-2",  "dxspider.co.uk",      7300, "Essex, UK",               51.7343,    0.4619));
+		getDXClusterServers().add(new DXClusterServer("S50CLX",   "s50clx.infrax.si",   41112, "Slovenia",                46.1512,   14.9955));
+	}
+
+	private static void establishDXClusterServersTable() {
+		Connection conn = getConnection();
+		try {
+			Statement st = conn.createStatement();
+			st.executeUpdate(
+				"CREATE TABLE IF NOT EXISTS dx_cluster_servers (" +
+				"id INTEGER PRIMARY KEY NOT NULL, " +
+				"call_node TEXT NOT NULL UNIQUE, " +
+				"host TEXT NOT NULL, " +
+				"port INTEGER NOT NULL, " +
+				"location TEXT, " +
+				"lat REAL, " +
+				"lon REAL)"
+			);
+			st.close();
+			insertDXClusterServers();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+		}
+	}
+
+	private static void insertDXClusterServers() {
+		Connection conn = getConnection();
+		for (DXClusterServer srv : getDXClusterServers()) {
+			try {
+				PreparedStatement ps = conn.prepareStatement(
+					"INSERT OR IGNORE INTO dx_cluster_servers (call_node, host, port, location, lat, lon) VALUES (?, ?, ?, ?, ?, ?)"
+				);
+				ps.setString(1, srv.getCallNode());
+				ps.setString(2, srv.getHost());
+				ps.setInt(3, srv.getPort());
+				ps.setString(4, srv.getLocation());
+				ps.setDouble(5, srv.getLat());
+				ps.setDouble(6, srv.getLon());
+				ps.execute();
+				ps.close();
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
+		try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
+	}
+
+	public static ArrayList<DXClusterServer> getDXClusterServers() {
+		return dxClusterServers;
+	}
+
 	public static Connection getConnection() {
 		Connection connection = null;
 		
@@ -117,6 +183,7 @@ public class Data {
 		establishLocationsTable();
 		establishPreferencesTable();
 		establishPlacesTable();
+		establishDXClusterServersTable();
 	}
 
 	private static void migrateLogsAddCreatedAt() {

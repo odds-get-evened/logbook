@@ -8,7 +8,9 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Toolkit;
 
+import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -21,6 +23,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.EtchedBorder;
 import javax.swing.border.TitledBorder;
 
+import org.qualsh.lb.data.Data;
+import org.qualsh.lb.dx.DXClusterServer;
 import org.qualsh.lb.util.Preferences;
 
 /**
@@ -36,14 +40,32 @@ public class DXClusterSettingsDialog extends JDialog {
 
     public DXClusterSettingsDialog(JFrame owner) {
         super(owner, "DX Cluster Settings", true);
-        setMinimumSize(new Dimension(380, 240));
+        setMinimumSize(new Dimension(420, 300));
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-        setSize((int) (screen.getWidth() * 0.28), (int) (screen.getHeight() * 0.30));
+        setSize((int) (screen.getWidth() * 0.30), (int) (screen.getHeight() * 0.38));
         setLocationRelativeTo(owner);
 
         JPanel outerPanel = new JPanel(new BorderLayout(0, 5));
         outerPanel.setBorder(new EmptyBorder(8, 8, 8, 8));
         getContentPane().add(outerPanel, BorderLayout.CENTER);
+
+        // ── Known Servers panel ───────────────────────────────────────────────
+        JPanel knownPanel = new JPanel();
+        knownPanel.setBorder(new CompoundBorder(
+                new TitledBorder(new EtchedBorder(EtchedBorder.LOWERED, null, null),
+                        "Known Servers", TitledBorder.LEADING, TitledBorder.TOP, null, null),
+                new EmptyBorder(6, 8, 6, 8)));
+        knownPanel.setLayout(new BorderLayout(6, 0));
+        outerPanel.add(knownPanel, BorderLayout.NORTH);
+
+        DefaultComboBoxModel<Object> comboModel = new DefaultComboBoxModel<>();
+        comboModel.addElement("— Select a server to auto-fill —");
+        for (DXClusterServer srv : Data.getDXClusterServers()) {
+            comboModel.addElement(srv);
+        }
+        JComboBox<Object> comboServers = new JComboBox<>(comboModel);
+        comboServers.setFont(new Font("Tahoma", Font.PLAIN, 11));
+        knownPanel.add(comboServers, BorderLayout.CENTER);
 
         // ── Settings panel ────────────────────────────────────────────────────
         JPanel settingsPanel = new JPanel();
@@ -129,6 +151,16 @@ public class DXClusterSettingsDialog extends JDialog {
         JButton btnCancel = new JButton("Cancel");
         btnCancel.addActionListener(e -> dispose());
         btnPanel.add(btnCancel);
+
+        // ── Wire up the combo selection ───────────────────────────────────────
+        comboServers.addActionListener(e -> {
+            Object selected = comboServers.getSelectedItem();
+            if (selected instanceof DXClusterServer) {
+                DXClusterServer srv = (DXClusterServer) selected;
+                textHost.setText(srv.getHost());
+                spinnerPort.setValue(srv.getPort());
+            }
+        });
 
         loadSettings();
     }
