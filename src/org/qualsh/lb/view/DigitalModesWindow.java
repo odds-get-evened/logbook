@@ -699,6 +699,8 @@ public class DigitalModesWindow extends JFrame {
                     }
                     // If still "playing" (not stopped), check loop flag
                 } while (playingFile && loopPlayback && cachedAudioPcm == pcm);
+            } catch (java.io.IOException e) {
+                // ByteArrayInputStream.read() should never throw, but satisfy the compiler
             } finally {
                 playingFile = false;
                 SwingUtilities.invokeLater(() -> {
