@@ -89,7 +89,15 @@ public class SpectrumWaterfallPanel extends JPanel {
 
     private int centerFreqHz = 1500;
     private int bandwidthHz  = 200;
-    private int dragAnchorHz = -1;   // −1 when not dragging
+
+    /** Pixel half-width of the padded grab zone around the centre cursor line. */
+    private static final int CENTER_GRAB_PX = 12;
+
+    private enum DragMode { NONE, CENTER, LOW_EDGE, HIGH_EDGE }
+    private DragMode dragMode    = DragMode.NONE;
+    private int      dragStartX  = -1;
+    /** The fixed edge (Hz) held constant while the opposite edge is being dragged. */
+    private int      dragFixedEdgeHz = -1;
 
     /** Called with (centerHz, bandwidthHz) whenever the selection changes. */
     private BiConsumer<Integer, Integer> selectionListener;
@@ -100,43 +108,88 @@ public class SpectrumWaterfallPanel extends JPanel {
         setPreferredSize(new Dimension(700, 250));
         setMinimumSize(new Dimension(300, 130));
         setBackground(Color.BLACK);
-        setToolTipText("Click to set centre frequency · drag to define bandwidth");
+        setToolTipText("Drag centre line to move frequency · drag sides to adjust bandwidth");
 
         addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
-                dragAnchorHz = xToFreq(e.getX());
-                centerFreqHz = dragAnchorHz;
-                bandwidthHz  = 0;
+                if (e.getButton() != MouseEvent.BUTTON1) return;
+                dragStartX = e.getX();
+                int cx = freqToX(centerFreqHz, getWidth());
+
+                if (Math.abs(e.getX() - cx) <= CENTER_GRAB_PX) {
+                    // Centre grab zone: drag moves centre frequency, bandwidth unchanged
+                    dragMode = DragMode.CENTER;
+                    dragFixedEdgeHz = -1;
+                } else if (e.getX() < cx) {
+                    // Left of centre: drag adjusts the low edge; high edge stays fixed
+                    dragMode = DragMode.LOW_EDGE;
+                    dragFixedEdgeHz = centerFreqHz + bandwidthHz / 2;
+                } else {
+                    // Right of centre: drag adjusts the high edge; low edge stays fixed
+                    dragMode = DragMode.HIGH_EDGE;
+                    dragFixedEdgeHz = centerFreqHz - bandwidthHz / 2;
+                }
                 repaint();
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                if (dragAnchorHz >= 0) {
-                    int f2 = xToFreq(e.getX());
-                    int lo = Math.min(dragAnchorHz, f2);
-                    int hi = Math.max(dragAnchorHz, f2);
-                    centerFreqHz = (lo + hi) / 2;
-                    bandwidthHz  = Math.max(hi - lo, 50);
-                    dragAnchorHz = -1;
-                    fireSelection();
-                    repaint();
+                if (dragMode == DragMode.NONE || dragStartX < 0) return;
+
+                if (Math.abs(e.getX() - dragStartX) <= 4) {
+                    // Treat as a simple click: move centre to click position, keep bandwidth
+                    centerFreqHz = xToFreq(dragStartX);
+                } else if (dragMode != DragMode.CENTER) {
+                    // Edge drag: enforce a minimum bandwidth on release
+                    bandwidthHz = Math.max(bandwidthHz, 50);
                 }
+
+                dragMode        = DragMode.NONE;
+                dragStartX      = -1;
+                dragFixedEdgeHz = -1;
+                updateCursor(e.getX());
+                fireSelection();
+                repaint();
             }
         });
 
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override
             public void mouseDragged(MouseEvent e) {
-                if (dragAnchorHz >= 0) {
-                    int f2 = xToFreq(e.getX());
-                    int lo = Math.min(dragAnchorHz, f2);
-                    int hi = Math.max(dragAnchorHz, f2);
-                    centerFreqHz = (lo + hi) / 2;
-                    bandwidthHz  = Math.max(hi - lo, 10);
-                    repaint();
+                if (dragMode == DragMode.NONE) return;
+                int freq = xToFreq(e.getX());
+
+                switch (dragMode) {
+                    case CENTER:
+                        centerFreqHz = freq;
+                        // bandwidth unchanged
+                        break;
+
+                    case LOW_EDGE: {
+                        int hi = dragFixedEdgeHz;
+                        int lo = Math.max(0, Math.min(freq, hi - 10));
+                        centerFreqHz = (lo + hi) / 2;
+                        bandwidthHz  = hi - lo;
+                        break;
+                    }
+
+                    case HIGH_EDGE: {
+                        int lo = dragFixedEdgeHz;
+                        int hi = Math.min((int) MAX_FREQ_HZ, Math.max(freq, lo + 10));
+                        centerFreqHz = (lo + hi) / 2;
+                        bandwidthHz  = hi - lo;
+                        break;
+                    }
+
+                    default: break;
                 }
+                repaint();
+            }
+
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                updateCursor(e.getX());
             }
         });
 
@@ -429,6 +482,21 @@ public class SpectrumWaterfallPanel extends JPanel {
         g.fillRect(labelX - 1, 4, fm.stringWidth(freqLabel) + 2, 13);
         g.setColor(new Color(255, 230, 0));
         g.drawString(freqLabel, labelX, 14);
+    }
+
+    // ── Cursor management ─────────────────────────────────────────────────────
+
+    private void updateCursor(int mouseX) {
+        if (bandwidthHz > 0) {
+            int cx = freqToX(centerFreqHz, getWidth());
+            if (Math.abs(mouseX - cx) <= CENTER_GRAB_PX) {
+                setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+            } else {
+                setCursor(Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR));
+            }
+        } else {
+            setCursor(Cursor.getDefaultCursor());
+        }
     }
 
     // ── Coordinate conversions ────────────────────────────────────────────────
