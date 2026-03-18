@@ -4,7 +4,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -54,8 +56,10 @@ public class DXClusterClient {
     public boolean connect(String host, int port, String callsign) {
         if (connected) disconnect();
         try {
-            socket = new Socket(host, port);
-            socket.setSoTimeout(0); // blocking reads
+            socket = new Socket();
+            socket.connect(new InetSocketAddress(host, port), 10_000); // 10 s connect timeout
+            // 1500 ms read timeout so we detect login prompts that lack a trailing newline
+            socket.setSoTimeout(1500);
             out = new PrintWriter(socket.getOutputStream(), true);
             in  = new BufferedReader(new InputStreamReader(socket.getInputStream()));
             connected = true;
@@ -63,23 +67,48 @@ public class DXClusterClient {
 
             final String cs = (callsign != null) ? callsign.trim() : "";
             readerThread = new Thread(() -> {
+                // Read character-by-character so that login prompts without a trailing
+                // newline (common on AR-Cluster and DX Spider nodes) do not block us.
+                // Callsign is sent as soon as we see the first complete line from the
+                // banner, or after the first read timeout (whichever comes first).
+                boolean loginSent = false;
+                StringBuilder lineBuffer = new StringBuilder();
                 try {
-                    // Give the cluster a moment to send its login banner
-                    Thread.sleep(600);
-                    if (!cs.isEmpty()) {
-                        out.println(cs);
-                    }
-                    String line;
-                    while (connected && (line = in.readLine()) != null) {
-                        notifyRawListeners(line);
-                        DXSpot spot = parseLine(line);
-                        if (spot != null) {
-                            notifySpotListeners(spot);
+                    while (connected) {
+                        int ch;
+                        try {
+                            ch = in.read();
+                        } catch (SocketTimeoutException ste) {
+                            // No newline arrived within the timeout window – the server is
+                            // probably showing a login prompt without '\n'.  Send callsign.
+                            if (!loginSent && !cs.isEmpty()) {
+                                out.println(cs);
+                                loginSent = true;
+                            }
+                            continue;
+                        }
+                        if (ch == -1) break; // server closed the connection
+                        if (ch == '\n') {
+                            String line = lineBuffer.toString().trim();
+                            lineBuffer.setLength(0);
+                            // Send the callsign the first time we receive a full line
+                            // (typically the welcome / login banner).
+                            if (!loginSent && !cs.isEmpty()) {
+                                out.println(cs);
+                                loginSent = true;
+                            }
+                            if (!line.isEmpty()) {
+                                notifyRawListeners(line);
+                                DXSpot spot = parseLine(line);
+                                if (spot != null) {
+                                    notifySpotListeners(spot);
+                                }
+                            }
+                        } else if (ch != '\r') {
+                            lineBuffer.append((char) ch);
                         }
                     }
-                } catch (InterruptedException ignored) {
-                    // shutdown requested
-                } catch (Exception e) {
+                } catch (IOException e) {
                     if (connected) {
                         System.err.println("DXClusterClient: reader error – " + e.getMessage());
                     }

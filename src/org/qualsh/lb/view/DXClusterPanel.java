@@ -10,6 +10,11 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
+
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -19,6 +24,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 
@@ -46,6 +52,15 @@ public class DXClusterPanel extends JPanel {
     private JTable  table;
     private JButton btnConnect;
     private JLabel  lblStatus;
+
+    // Status bar
+    private JLabel lblStatusBar;
+    private Timer  uptimeTimer;
+    private long   connectionStartTime = 0;
+    private long   lastSpotTime        = 0;
+    private int    spotsReceived       = 0;
+    private String connectedHost       = "";
+    private int    connectedPort       = 0;
 
     private LogInteraction logInteraction;
 
@@ -111,20 +126,75 @@ public class DXClusterPanel extends JPanel {
 
         add(new JScrollPane(table), BorderLayout.CENTER);
 
+        // ── Status bar ────────────────────────────────────────────────────────
+        JPanel statusBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 2));
+        statusBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, UIManager_getGridColor()),
+                new EmptyBorder(1, 2, 1, 2)));
+
+        lblStatusBar = new JLabel("Not connected");
+        lblStatusBar.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        lblStatusBar.setForeground(Color.GRAY);
+        statusBar.add(lblStatusBar);
+
+        add(statusBar, BorderLayout.SOUTH);
+
+        // Timer to refresh uptime once per second while connected
+        uptimeTimer = new Timer(1000, e -> refreshStatusBar());
+        uptimeTimer.setRepeats(true);
+
         // ── Wire up client listeners ──────────────────────────────────────────
         client.addStatusListener(conn -> SwingUtilities.invokeLater(() -> {
             if (conn) {
                 lblStatus.setForeground(new Color(0, 160, 0));
                 lblStatus.setToolTipText("DX Cluster: connected");
                 btnConnect.setText("Disconnect");
+                connectionStartTime = System.currentTimeMillis();
+                spotsReceived = 0;
+                lastSpotTime = 0;
+                lblStatusBar.setForeground(new Color(0, 130, 0));
+                refreshStatusBar();
+                uptimeTimer.start();
             } else {
                 lblStatus.setForeground(Color.LIGHT_GRAY);
                 lblStatus.setToolTipText("DX Cluster: not connected");
                 btnConnect.setText("Connect");
+                uptimeTimer.stop();
+                lblStatusBar.setText("Not connected");
+                lblStatusBar.setForeground(Color.GRAY);
             }
         }));
 
-        client.addSpotListener(spot -> SwingUtilities.invokeLater(() -> tableModel.addSpot(spot)));
+        client.addSpotListener(spot -> SwingUtilities.invokeLater(() -> {
+            tableModel.addSpot(spot);
+            spotsReceived++;
+            lastSpotTime = System.currentTimeMillis();
+            refreshStatusBar();
+        }));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /** Returns a muted grid/border color that works with both light and dark themes. */
+    private static Color UIManager_getGridColor() {
+        Color c = javax.swing.UIManager.getColor("Table.gridColor");
+        return (c != null) ? c : new Color(200, 200, 200);
+    }
+
+    private void refreshStatusBar() {
+        String lastSpot = "Last spot: —";
+        if (lastSpotTime > 0) {
+            LocalTime t = LocalTime.ofInstant(Instant.ofEpochMilli(lastSpotTime), ZoneOffset.UTC);
+            lastSpot = String.format("Last spot: %02d:%02d:%02dZ", t.getHour(), t.getMinute(), t.getSecond());
+        }
+        String uptime = "Uptime: 00:00:00";
+        if (connectionStartTime > 0) {
+            long secs = (System.currentTimeMillis() - connectionStartTime) / 1000;
+            uptime = String.format("Uptime: %02d:%02d:%02d", secs / 3600, (secs % 3600) / 60, secs % 60);
+        }
+        lblStatusBar.setText(String.format(
+                "Connected to %s:%d  ·  %s  ·  Spots: %d  ·  %s",
+                connectedHost, connectedPort, lastSpot, spotsReceived, uptime));
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
@@ -155,6 +225,12 @@ public class DXClusterPanel extends JPanel {
         final int    fPort     = port;
         final String fCallsign = callsign;
 
+        connectedHost = fHost;
+        connectedPort = fPort;
+
+        lblStatusBar.setText("Connecting to " + fHost + ":" + fPort + "…");
+        lblStatusBar.setForeground(Color.GRAY);
+
         btnConnect.setEnabled(false);
         new Thread(() -> {
             boolean ok = client.connect(fHost, fPort, fCallsign);
@@ -163,6 +239,8 @@ public class DXClusterPanel extends JPanel {
                 if (!ok) {
                     lblStatus.setForeground(Color.RED);
                     lblStatus.setToolTipText("DX Cluster: connection failed");
+                    lblStatusBar.setText("Connection failed (" + fHost + ":" + fPort + ")");
+                    lblStatusBar.setForeground(Color.RED);
                     JOptionPane.showMessageDialog(DXClusterPanel.this,
                             "Could not connect to DX Cluster at " + fHost + ":" + fPort + "\n"
                             + "Check your settings.",
