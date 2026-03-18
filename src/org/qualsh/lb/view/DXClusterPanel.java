@@ -7,7 +7,9 @@ import java.awt.Font;
 import java.awt.Window;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 import java.time.Instant;
@@ -16,6 +18,7 @@ import java.time.ZoneOffset;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -46,16 +49,28 @@ public class DXClusterPanel extends JPanel {
 
     private static final int MAX_SPOTS = 300;
 
+    // Polling interval options (label → milliseconds)
+    private static final String[] INTERVAL_LABELS = {"10 sec", "30 sec", "1 min", "5 min"};
+    private static final int[]    INTERVAL_MS      = {10_000,  30_000,  60_000, 300_000};
+    private static final int      DEFAULT_INTERVAL_IDX = 1; // 30 sec
+
     private final DXClusterClient client     = new DXClusterClient();
     private final SpotsTableModel tableModel = new SpotsTableModel();
 
-    private JTable  table;
-    private JButton btnConnect;
-    private JLabel  lblStatus;
+    /** Spots buffered between flushes (accessed only on EDT). */
+    private final Deque<DXSpot> pendingSpots = new ArrayDeque<>();
+
+    private JTable    table;
+    private JButton   btnConnect;
+    private JButton   btnUpdate;
+    private JComboBox<String> comboInterval;
+    private JLabel    lblStatus;
+    private JLabel    lblPending;
 
     // Status bar
     private JLabel lblStatusBar;
     private Timer  uptimeTimer;
+    private Timer  flushTimer;
     private long   connectionStartTime = 0;
     private long   lastSpotTime        = 0;
     private int    spotsReceived       = 0;
@@ -88,6 +103,23 @@ public class DXClusterPanel extends JPanel {
             dlg.setVisible(true);
         });
         topBar.add(btnSettings);
+
+        topBar.add(new JLabel("Update every:"));
+        comboInterval = new JComboBox<>(INTERVAL_LABELS);
+        comboInterval.setSelectedIndex(DEFAULT_INTERVAL_IDX);
+        comboInterval.setToolTipText("How often buffered spots are flushed to the table");
+        comboInterval.addActionListener(e -> restartFlushTimer());
+        topBar.add(comboInterval);
+
+        btnUpdate = new JButton("Update Now");
+        btnUpdate.setToolTipText("Flush buffered spots to the table immediately");
+        btnUpdate.addActionListener(e -> flushPendingSpots());
+        topBar.add(btnUpdate);
+
+        lblPending = new JLabel("");
+        lblPending.setFont(lblPending.getFont().deriveFont(Font.ITALIC, 10f));
+        lblPending.setForeground(Color.GRAY);
+        topBar.add(lblPending);
 
         JLabel lblHint = new JLabel("Double-click a spot to tune the radio and populate the entry form.");
         lblHint.setFont(lblHint.getFont().deriveFont(Font.ITALIC, 10f));
@@ -143,6 +175,10 @@ public class DXClusterPanel extends JPanel {
         uptimeTimer = new Timer(1000, e -> refreshStatusBar());
         uptimeTimer.setRepeats(true);
 
+        // Flush timer: periodically move buffered spots into the table
+        flushTimer = new Timer(INTERVAL_MS[DEFAULT_INTERVAL_IDX], e -> flushPendingSpots());
+        flushTimer.setRepeats(true);
+
         // ── Wire up client listeners ──────────────────────────────────────────
         client.addStatusListener(conn -> SwingUtilities.invokeLater(() -> {
             if (conn) {
@@ -155,21 +191,24 @@ public class DXClusterPanel extends JPanel {
                 lblStatusBar.setForeground(new Color(0, 130, 0));
                 refreshStatusBar();
                 uptimeTimer.start();
+                flushTimer.start();
             } else {
                 lblStatus.setForeground(Color.LIGHT_GRAY);
                 lblStatus.setToolTipText("DX Cluster: not connected");
                 btnConnect.setText("Connect");
                 uptimeTimer.stop();
+                flushTimer.stop();
                 lblStatusBar.setText("Not connected");
                 lblStatusBar.setForeground(Color.GRAY);
             }
         }));
 
         client.addSpotListener(spot -> SwingUtilities.invokeLater(() -> {
-            tableModel.addSpot(spot);
+            // Buffer the spot; it will be flushed to the table by the flush timer
+            pendingSpots.addFirst(spot);
             spotsReceived++;
             lastSpotTime = System.currentTimeMillis();
-            refreshStatusBar();
+            updatePendingLabel();
         }));
     }
 
@@ -195,6 +234,38 @@ public class DXClusterPanel extends JPanel {
         lblStatusBar.setText(String.format(
                 "Connected to %s:%d  ·  %s  ·  Spots: %d  ·  %s",
                 connectedHost, connectedPort, lastSpot, spotsReceived, uptime));
+    }
+
+    /** Move all buffered spots into the visible table. Called on EDT. */
+    private void flushPendingSpots() {
+        if (pendingSpots.isEmpty()) return;
+        // pendingSpots are newest-first (addFirst); removeFirst gives newest.
+        // tableModel.addSpot prepends at row 0, so process oldest-first so the
+        // newest ends up at the top of the table.
+        List<DXSpot> batch = new ArrayList<>(pendingSpots);
+        pendingSpots.clear();
+        // batch[0] = newest; iterate in reverse to add oldest first
+        for (int i = batch.size() - 1; i >= 0; i--) {
+            tableModel.addSpot(batch.get(i));
+        }
+        refreshStatusBar();
+        updatePendingLabel();
+    }
+
+    private void updatePendingLabel() {
+        int n = pendingSpots.size();
+        lblPending.setText(n > 0 ? "(" + n + " buffered)" : "");
+    }
+
+    /** Restart the flush timer with the currently selected interval. */
+    private void restartFlushTimer() {
+        int idx = comboInterval.getSelectedIndex();
+        if (idx < 0 || idx >= INTERVAL_MS.length) return;
+        flushTimer.setDelay(INTERVAL_MS[idx]);
+        flushTimer.setInitialDelay(INTERVAL_MS[idx]);
+        if (flushTimer.isRunning()) {
+            flushTimer.restart();
+        }
     }
 
     // ── Actions ───────────────────────────────────────────────────────────────
