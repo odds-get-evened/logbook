@@ -16,6 +16,15 @@ public class Preferences {
 	public static final String PREF_NAME_DB_PATH = "db_path";
 	public static final String PREF_NAME_DEFAULT_PLACE = "default_place";
 
+	// CAT / rig control
+	public static final String PREF_CAT_TYPE               = "cat_type";               // RIGCTLD | SERIAL
+	public static final String PREF_CAT_RIGCTLD_HOST       = "cat_rigctld_host";
+	public static final String PREF_CAT_RIGCTLD_PORT       = "cat_rigctld_port";
+	public static final String PREF_CAT_SERIAL_PORT        = "cat_serial_port";
+	public static final String PREF_CAT_SERIAL_BAUD        = "cat_serial_baud";
+	public static final String PREF_CAT_SERIAL_PROTOCOL    = "cat_serial_protocol";    // YAESU | KENWOOD | ICOM
+	public static final String PREF_CAT_ICOM_ADDRESS       = "cat_icom_address";       // hex string e.g. "A4"
+
 	public Preferences() {
 		
 	}
