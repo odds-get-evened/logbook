@@ -96,6 +96,15 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 		});
 		menuTools.add(menuItemCatSettings);
 
+		JMenuItem menuItemDxSettings = new JMenuItem("DX Cluster Settings\u2026");
+		menuItemDxSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				DXClusterSettingsDialog dlg = new DXClusterSettingsDialog((JFrame) LogMenuBar.this.getMainFrame());
+				dlg.setVisible(true);
+			}
+		});
+		menuTools.add(menuItemDxSettings);
+
 		this.setMenuHelp(new JMenu("Help"));
 		add(this.getMenuHelp());
 

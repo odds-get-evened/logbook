@@ -99,7 +99,8 @@ public class LogInteraction extends JPanel {
 	private Place selectedMyPlace = null;
 	private JLabel lblRigStatus;
 	private JButton btnFromRadio;
-	
+	private DXClusterPanel dxClusterPanel;
+
 	public LogInteraction() {
 		setLayout(new BorderLayout(0, 0));
 		
@@ -534,10 +535,15 @@ public class LogInteraction extends JPanel {
 		locationsPanel = new JPanel();
 		tabbedPane.addTab("Locations", null, locationsPanel, null);
 		locationsPanel.setLayout(new BorderLayout(0, 0));
-		
+
 		locationsTab = new LocationsTab();
 		locationsPanel.add(locationsTab, BorderLayout.CENTER);
-		
+
+		// DX Cluster tab
+		dxClusterPanel = new DXClusterPanel();
+		dxClusterPanel.setLogInteraction(this);
+		tabbedPane.addTab("DX Cluster", null, dxClusterPanel, null);
+
 	}
 	
 	public ViewRXPanel getViewRXPanel() {
@@ -925,6 +931,10 @@ public class LogInteraction extends JPanel {
 
 	public void setLblRxCoordinates(JLabel lblRxCoordinates) {
 		this.lblRxCoordinates = lblRxCoordinates;
+	}
+
+	public DXClusterPanel getDxClusterPanel() {
+		return dxClusterPanel;
 	}
 
 	public PreferencesDialog getPreferencesDialog() {
