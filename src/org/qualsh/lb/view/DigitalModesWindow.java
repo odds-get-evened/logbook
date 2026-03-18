@@ -33,6 +33,9 @@ import java.util.function.Consumer;
  * ┌─────────────────────────────────────────────────────────────┐
  * │  [Mode: FT8 ▼]  [Freq: 14.074000 MHz]  [Set Band Defaults] │  ← toolbar
  * ├─────────────────────────────────────────────────────────────┤
+ * │  Spectrum + Waterfall display (0–4 kHz audio band)          │  ← spectrum/waterfall
+ * │  [● 1500 Hz ± 100 Hz]  [Tune to Selected]                  │  ← selection info
+ * ├─────────────────────────────────────────────────────────────┤
  * │  Decoded Messages (from WSJT-X UDP)                         │  ← live table
  * │  Time    Call     Grid   dB   DT   Freq   Message           │
  * │  …                                                          │
@@ -48,6 +51,19 @@ import java.util.function.Consumer;
  * Each decoded line from a WSJT-X Status message is displayed in the table.
  * When WSJT-X sends a <b>QSO-Logged (Type 5)</b> message, and auto-log is
  * enabled, a {@link Log} entry is automatically inserted into the database.
+ *
+ * <h2>Spectrum / Waterfall</h2>
+ * <p>Live audio from the capture device is processed via a real-time FFT and
+ * displayed as a scrolling waterfall. Click or drag on the panel to select a
+ * centre frequency and bandwidth. Use <b>Tune to Selected</b> to shift the
+ * radio's dial so the selected audio frequency aligns to the mode's nominal
+ * tone centre (e.g. 1500 Hz for FT8/FT4/JS8Call).
+ *
+ * <h2>Audio file playback</h2>
+ * <p>Use <b>Upload Audio…</b> to open a pre-recorded WAV/MP3/OGG/FLAC file and
+ * route it to the configured playback device so WSJT-X can decode it. The file
+ * audio is also fed through the waterfall. A <b>Stop Playback</b> button
+ * appears during playback.
  *
  * <h2>Concurrency</h2>
  * <ul>
@@ -78,6 +94,12 @@ public class DigitalModesWindow extends JFrame {
     private JLabel lblPlaybackStatus;
     private JCheckBox chkAutoLog;
 
+    // ── Spectrum / waterfall ──────────────────────────────────────────────────
+
+    private SpectrumWaterfallPanel waterfallPanel;
+    private JLabel lblSelectionInfo;
+    private Consumer<byte[]> waterfallCaptureListener;
+
     /** Live WSJT-X decoded messages: Time | Call | Grid | dB | DT | Freq | Msg */
     private DefaultTableModel decodedModel;
     private JTable decodedTable;
@@ -97,6 +119,15 @@ public class DigitalModesWindow extends JFrame {
     private volatile boolean recording = false;
     private ByteArrayOutputStream recordingBuffer;
     private Consumer<byte[]> recordingListener;
+
+    // ── File playback ─────────────────────────────────────────────────────────
+
+    private volatile boolean playingFile = false;
+    private JButton btnStopPlayback;
+
+    // ── Current dial frequency (kHz) for tune-to-selected ────────────────────
+
+    private volatile double currentFreqKhz = 0.0;
 
     // ── Polling ───────────────────────────────────────────────────────────────
 
@@ -151,9 +182,49 @@ public class DigitalModesWindow extends JFrame {
         outer.setBorder(new EmptyBorder(8, 8, 8, 8));
         setContentPane(outer);
 
-        outer.add(buildToolbar(),     BorderLayout.NORTH);
-        outer.add(buildCentrePanel(), BorderLayout.CENTER);
-        outer.add(buildStatusBar(),   BorderLayout.SOUTH);
+        outer.add(buildToolbar(), BorderLayout.NORTH);
+
+        // Centre area: waterfall at top, decoded/autolog tables below
+        JPanel centreArea = new JPanel(new BorderLayout(0, 4));
+        centreArea.add(buildWaterfallSection(), BorderLayout.NORTH);
+        centreArea.add(buildCentrePanel(),      BorderLayout.CENTER);
+
+        outer.add(centreArea,      BorderLayout.CENTER);
+        outer.add(buildStatusBar(), BorderLayout.SOUTH);
+    }
+
+    private JPanel buildWaterfallSection() {
+        waterfallPanel = new SpectrumWaterfallPanel();
+        waterfallPanel.setBorder(BorderFactory.createTitledBorder("Spectrum / Waterfall  (click to select frequency · drag to set bandwidth)"));
+
+        // Set initial selection to the first mode's tone centre
+        DigitalMode defaultMode = (DigitalMode) comboMode.getSelectedItem();
+        if (defaultMode != null) {
+            waterfallPanel.setSelection(defaultMode.getAudioToneCentreHz(), 200);
+        }
+
+        waterfallPanel.setSelectionListener((centerHz, bwHz) ->
+            SwingUtilities.invokeLater(() -> updateSelectionLabel(centerHz, bwHz))
+        );
+
+        // Selection info bar
+        lblSelectionInfo = new JLabel("Selected: " + waterfallPanel.getCenterFreqHz()
+                + " Hz  ±  " + (waterfallPanel.getBandwidthHz() / 2) + " Hz");
+        lblSelectionInfo.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+
+        JButton btnTune = new JButton("Tune to Selected");
+        btnTune.setToolTipText(
+                "Shift the radio dial so the selected audio frequency aligns to this mode's tone centre");
+        btnTune.addActionListener(e -> onTuneToSelected());
+
+        JPanel infoBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+        infoBar.add(lblSelectionInfo);
+        infoBar.add(btnTune);
+
+        JPanel section = new JPanel(new BorderLayout(0, 2));
+        section.add(waterfallPanel, BorderLayout.CENTER);
+        section.add(infoBar,        BorderLayout.SOUTH);
+        return section;
     }
 
     private JPanel buildToolbar() {
@@ -264,9 +335,16 @@ public class DigitalModesWindow extends JFrame {
         sb.add(btnRecord);
 
         JButton btnUpload = new JButton("\u25B2 Upload Audio\u2026");
-        btnUpload.setToolTipText("Upload an audio file and play it to WSJT-X for decoding");
+        btnUpload.setToolTipText("Upload an audio file and play it to WSJT-X for decoding (also shown in waterfall)");
         btnUpload.addActionListener(e -> onUploadAudio());
         sb.add(btnUpload);
+
+        btnStopPlayback = new JButton("\u25A0 Stop Playback");
+        btnStopPlayback.setToolTipText("Stop the currently playing audio file");
+        btnStopPlayback.setForeground(Color.RED);
+        btnStopPlayback.setVisible(false);
+        btnStopPlayback.addActionListener(e -> playingFile = false);
+        sb.add(btnStopPlayback);
 
         return sb;
     }
@@ -296,6 +374,15 @@ public class DigitalModesWindow extends JFrame {
         WsjtxUdpListener.getInstance().addQsoLoggedListener(msg ->
             SwingUtilities.invokeLater(() -> handleQsoLogged(msg))
         );
+
+        // Mode change → update waterfall default selection to mode's tone centre
+        comboMode.addActionListener(e -> {
+            DigitalMode mode = (DigitalMode) comboMode.getSelectedItem();
+            if (mode != null && waterfallPanel != null) {
+                waterfallPanel.setSelection(mode.getAudioToneCentreHz(), 200);
+                updateSelectionLabel(mode.getAudioToneCentreHz(), 200);
+            }
+        });
     }
 
     // ── Start-up ──────────────────────────────────────────────────────────────
@@ -364,6 +451,12 @@ public class DigitalModesWindow extends JFrame {
         } else {
             updatePlaybackStatus(true);
         }
+
+        // Register waterfall listener for live capture audio (idempotent)
+        if (waterfallCaptureListener == null && waterfallPanel != null) {
+            waterfallCaptureListener = waterfallPanel::feedPcm;
+            audio.addCaptureListener(waterfallCaptureListener);
+        }
     }
 
     // ── Event handlers ────────────────────────────────────────────────────────
@@ -382,6 +475,35 @@ public class DigitalModesWindow extends JFrame {
             SwingUtilities.invokeLater(() ->
                 updateFrequencyLabel(mode.getDefaultFreqKhz()));
         }, "DigitalModesWin-setFreq").start();
+    }
+
+    /**
+     * Shift the radio's dial frequency so that the user's selected audio
+     * frequency aligns to this mode's nominal tone centre.
+     *
+     * <p>For USB: RF = dial + audio. So to move a signal at {@code selectedHz}
+     * to appear at {@code modeAudioCentreHz}, we adjust the dial by
+     * {@code (selectedHz − modeAudioCentreHz)} kHz.
+     *
+     * <p>Example: selected = 1200 Hz, mode centre = 1500 Hz, dial = 14 074.000 kHz
+     * → new dial = 14 074.000 + (1200 − 1500)/1000 = 14 073.700 kHz
+     */
+    private void onTuneToSelected() {
+        DigitalMode mode = (DigitalMode) comboMode.getSelectedItem();
+        if (mode == null || currentFreqKhz == 0.0) return;
+
+        int selectedHz     = waterfallPanel.getCenterFreqHz();
+        int modeAudioHz    = mode.getAudioToneCentreHz();
+        double offsetKhz   = (selectedHz - modeAudioHz) / 1000.0;
+        double newFreqKhz  = currentFreqKhz + offsetKhz;
+
+        new Thread(() -> {
+            RadioService svc = RadioService.getInstance();
+            if (svc.isConnected()) {
+                svc.setFrequencyKhz(newFreqKhz);
+            }
+            SwingUtilities.invokeLater(() -> updateFrequencyLabel(newFreqKhz));
+        }, "DigitalModesWin-tuneToSelected").start();
     }
 
     private void onTogglePtt() {
@@ -455,35 +577,56 @@ public class DigitalModesWindow extends JFrame {
     }
 
     private void onUploadAudio() {
+        if (playingFile) {
+            // Stop current playback instead of opening another file
+            playingFile = false;
+            return;
+        }
+
         JFileChooser fc = new JFileChooser();
         fc.setDialogTitle("Upload Audio File for Decoding");
         fc.setFileFilter(new FileNameExtensionFilter(
                 "Audio files (*.wav, *.mp3, *.ogg, *.flac)", "wav", "mp3", "ogg", "flac"));
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
+
         File file = fc.getSelectedFile();
+        playingFile = true;
+
+        SwingUtilities.invokeLater(() -> {
+            btnStopPlayback.setVisible(true);
+            revalidate();
+        });
+
         new Thread(() -> {
             try {
                 AudioInputStream rawStream = AudioSystem.getAudioInputStream(file);
                 AudioFormat srcFormat = rawStream.getFormat();
                 AudioInputStream pcmStream;
-                // Convert to the required PCM format if needed
                 if (!srcFormat.matches(AudioRouter.FORMAT)) {
                     pcmStream = AudioSystem.getAudioInputStream(AudioRouter.FORMAT, rawStream);
                 } else {
                     pcmStream = rawStream;
                 }
-                byte[] buf = new byte[2048];
-                int read;
+
                 SwingUtilities.invokeLater(() ->
                     JOptionPane.showMessageDialog(DigitalModesWindow.this,
-                        "Playing \"" + file.getName() + "\" to the playback device.\n" +
-                        "Ensure WSJT-X is listening on that audio input to decode.",
-                        "Audio Upload", JOptionPane.INFORMATION_MESSAGE));
-                while ((read = pcmStream.read(buf)) != -1) {
+                        "Playing \u201c" + file.getName() + "\u201d to the playback device.\n" +
+                        "The waterfall will display the file\u2019s spectrum.\n" +
+                        "Ensure WSJT-X is listening on that audio input to decode.\n" +
+                        "Click \u201cStop Playback\u201d in the toolbar to cancel.",
+                        "Audio Playback", JOptionPane.INFORMATION_MESSAGE));
+
+                byte[] buf = new byte[AudioRouter.FORMAT.getFrameSize() * 512]; // ~5 ms chunks
+                int read;
+                AudioRouter router = AudioRouter.getInstance();
+                while (playingFile && (read = pcmStream.read(buf)) != -1) {
                     if (read > 0) {
                         byte[] chunk = new byte[read];
                         System.arraycopy(buf, 0, chunk, 0, read);
-                        AudioRouter.getInstance().play(chunk);
+                        // Send to playback device (WSJT-X receives it)
+                        router.play(chunk);
+                        // Also feed the waterfall so the spectrum is visible
+                        if (waterfallPanel != null) waterfallPanel.feedPcm(chunk);
                     }
                 }
                 pcmStream.close();
@@ -491,7 +634,13 @@ public class DigitalModesWindow extends JFrame {
                 SwingUtilities.invokeLater(() ->
                     JOptionPane.showMessageDialog(DigitalModesWindow.this,
                         "Could not read audio file:\n" + ex.getMessage(),
-                        "Audio Upload Error", JOptionPane.ERROR_MESSAGE));
+                        "Audio Playback Error", JOptionPane.ERROR_MESSAGE));
+            } finally {
+                playingFile = false;
+                SwingUtilities.invokeLater(() -> {
+                    btnStopPlayback.setVisible(false);
+                    revalidate();
+                });
             }
         }, "DigitalModesWin-uploadAudio").start();
     }
@@ -587,8 +736,13 @@ public class DigitalModesWindow extends JFrame {
     // ── UI update helpers (call only from EDT) ─────────────────────────────────
 
     private void updateFrequencyLabel(double freqKhz) {
+        currentFreqKhz = freqKhz;
         lblFrequency.setText(String.format("%.6f MHz", freqKhz / 1000.0));
         updateRigStatus(true);
+    }
+
+    private void updateSelectionLabel(int centerHz, int bwHz) {
+        lblSelectionInfo.setText("Selected: " + centerHz + " Hz  ±  " + (bwHz / 2) + " Hz");
     }
 
     private void updateRigStatus(boolean connected) {
@@ -643,6 +797,10 @@ public class DigitalModesWindow extends JFrame {
     /** Register a JVM shutdown hook to stop audio + UDP. */
     public void registerShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            playingFile = false;
+            if (waterfallCaptureListener != null) {
+                AudioRouter.getInstance().removeCaptureListener(waterfallCaptureListener);
+            }
             AudioRouter.getInstance().stopCapture();
             AudioRouter.getInstance().closePlayback();
             WsjtxUdpListener.getInstance().stop();
