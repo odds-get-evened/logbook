@@ -25,6 +25,11 @@ public class Preferences {
 	public static final String PREF_CAT_SERIAL_PROTOCOL    = "cat_serial_protocol";    // YAESU | KENWOOD | ICOM
 	public static final String PREF_CAT_ICOM_ADDRESS       = "cat_icom_address";       // hex string e.g. "A4"
 
+	// DX Cluster
+	public static final String PREF_DX_CLUSTER_HOST        = "dx_cluster_host";
+	public static final String PREF_DX_CLUSTER_PORT        = "dx_cluster_port";        // default 7300
+	public static final String PREF_DX_CLUSTER_CALLSIGN    = "dx_cluster_callsign";    // login callsign
+
 	public Preferences() {
 		
 	}

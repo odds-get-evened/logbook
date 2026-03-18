@@ -177,6 +177,33 @@ public class RigController {
     }
 
     /**
+     * Set VFO-A to the given frequency.
+     *
+     * @param freqKhz frequency in kHz
+     * @return {@code true} on success
+     */
+    public boolean setFrequency(double freqKhz) {
+        if (!connected) return false;
+        long hz = Math.round(freqKhz * 1000.0);
+        try {
+            if (rigctldSocket != null && !rigctldSocket.isClosed()) {
+                // rigctld "set_freq" command: "F <Hz>"
+                rigctldOut.println("F " + hz);
+                String reply = rigctldIn.readLine();
+                return reply != null && !reply.trim().startsWith("RPRT -");
+            } else if (serialPort != null && serialPort.isOpen()) {
+                String protoStr = Preferences.getOne(Preferences.PREF_CAT_SERIAL_PROTOCOL);
+                SerialProtocol proto = parseProtocol(protoStr);
+                return setSerialFrequency(hz, proto);
+            }
+        } catch (Exception e) {
+            System.err.println("RigController: setFrequency failed – " + e.getMessage());
+            disconnect();
+        }
+        return false;
+    }
+
+    /**
      * Query the radio once and return the VFO-A frequency in kHz,
      * or {@code -1} if the query fails.
      */
@@ -403,6 +430,62 @@ public class RigController {
             serialPort.closePort();
         }
         serialPort = null;
+    }
+
+    // ── Serial set-frequency helpers ──────────────────────────────────────────
+
+    private boolean setSerialFrequency(long hz, SerialProtocol proto) throws IOException {
+        switch (proto) {
+            case YAESU:   return setYaesuFrequency(hz);
+            case KENWOOD: return setKenwoodFrequency(hz);
+            case ICOM:    return setIcomFrequency(hz);
+            default:      return setYaesuFrequency(hz);
+        }
+    }
+
+    /** Yaesu: send {@code FA<11-digit-Hz>;} */
+    private boolean setYaesuFrequency(long hz) throws IOException {
+        String cmd = String.format("FA%011d;", hz);
+        serialPort.getOutputStream().write(cmd.getBytes());
+        serialPort.getOutputStream().flush();
+        return true;
+    }
+
+    /** Kenwood: send {@code FA<11-digit-Hz>;} */
+    private boolean setKenwoodFrequency(long hz) throws IOException {
+        String cmd = String.format("FA%011d;", hz);
+        serialPort.getOutputStream().write(cmd.getBytes());
+        serialPort.getOutputStream().flush();
+        return true;
+    }
+
+    /** Icom CI-V: send set-frequency command {@code FE FE [addr] E0 05 [bcd] FD}. */
+    private boolean setIcomFrequency(long hz) throws IOException {
+        String addrStr = Preferences.getOne(Preferences.PREF_CAT_ICOM_ADDRESS);
+        int addr = 0xA4;
+        if (addrStr != null && !addrStr.isEmpty()) {
+            try { addr = Integer.parseInt(addrStr, 16); } catch (NumberFormatException ignored) {}
+        }
+        byte[] bcd = encodeCivBcd(hz);
+        byte[] cmd = {
+            (byte)0xFE, (byte)0xFE, (byte)addr, (byte)0xE0, 0x05,
+            bcd[0], bcd[1], bcd[2], bcd[3], bcd[4],
+            (byte)0xFD
+        };
+        serialPort.getOutputStream().write(cmd);
+        serialPort.getOutputStream().flush();
+        return true;
+    }
+
+    /** Encode Hz value as 5-byte BCD (LSB first) for CI-V. */
+    private byte[] encodeCivBcd(long hz) {
+        byte[] bcd = new byte[5];
+        for (int i = 0; i < 5; i++) {
+            int lo = (int)(hz % 10); hz /= 10;
+            int hi = (int)(hz % 10); hz /= 10;
+            bcd[i] = (byte)((hi << 4) | lo);
+        }
+        return bcd;
     }
 
     // ── Polling ───────────────────────────────────────────────────────────────
