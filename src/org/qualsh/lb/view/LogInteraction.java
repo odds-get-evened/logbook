@@ -26,6 +26,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.ChangeEvent;
@@ -37,6 +38,7 @@ import org.qualsh.lb.MainWin;
 import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.place.Place;
+import org.qualsh.lb.rig.RigController;
 import org.qualsh.lb.util.FormError;
 import org.qualsh.lb.util.Preferences;
 import org.qualsh.lb.util.TextNote;
@@ -95,6 +97,8 @@ public class LogInteraction extends JPanel {
 	private EditLocationPanel editLocationPanel;
 	private JPanel formErrorPanel;
 	private Place selectedMyPlace = null;
+	private JLabel lblRigStatus;
+	private JButton btnFromRadio;
 	
 	public LogInteraction() {
 		setLayout(new BorderLayout(0, 0));
@@ -338,9 +342,50 @@ public class LogInteraction extends JPanel {
 		label = new JLabel("Frequency");
 		label.setFont(new Font("Tahoma", Font.BOLD, 12));
 		logEntryForm.add(label, "2, 2, right, default");
-		
+
 		textFrequency = new FrequencyTextField();
-		logEntryForm.add(textFrequency, "4, 2, fill, default");
+
+		// Status dot: grey = not connected, green = connected
+		lblRigStatus = new JLabel("\u25CF"); // ● filled circle
+		lblRigStatus.setForeground(Color.LIGHT_GRAY);
+		lblRigStatus.setToolTipText("CAT rig control: not connected");
+
+		btnFromRadio = new JButton("From Radio");
+		btnFromRadio.setFont(btnFromRadio.getFont().deriveFont(11f));
+		btnFromRadio.setMargin(new java.awt.Insets(1, 5, 1, 5));
+		btnFromRadio.setToolTipText("Click to connect to the radio and read the current frequency");
+		btnFromRadio.addActionListener(ev -> onFromRadio());
+
+		JPanel freqPanel = new JPanel(new BorderLayout(3, 0));
+		freqPanel.add(textFrequency, BorderLayout.CENTER);
+		JPanel freqBtnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+		freqBtnPanel.add(btnFromRadio);
+		freqBtnPanel.add(lblRigStatus);
+		freqPanel.add(freqBtnPanel, BorderLayout.EAST);
+		logEntryForm.add(freqPanel, "4, 2, fill, default");
+
+		// Register CAT status and frequency listeners
+		RigController.getInstance().addStatusListener(conn -> SwingUtilities.invokeLater(() -> {
+			if (conn) {
+				lblRigStatus.setForeground(new Color(0, 160, 0));
+				lblRigStatus.setToolTipText("CAT rig control: connected");
+				btnFromRadio.setText("Disconnect");
+			} else {
+				lblRigStatus.setForeground(Color.LIGHT_GRAY);
+				lblRigStatus.setToolTipText("CAT rig control: not connected");
+				btnFromRadio.setText("From Radio");
+			}
+		}));
+		RigController.getInstance().addFrequencyListener(freqKhz -> SwingUtilities.invokeLater(() -> {
+			// Format: drop trailing zeros (e.g. 14225.0 → "14225", 14225.5 → "14225.5")
+			String formatted;
+			if (freqKhz == Math.floor(freqKhz)) {
+				formatted = String.valueOf((long) freqKhz.doubleValue());
+			} else {
+				formatted = String.format("%.3f", freqKhz).replaceAll("0+$", "");
+			}
+			textFrequency.setText(formatted);
+		}));
 		
 		label_1 = new JLabel("Mode");
 		label_1.setFont(new Font("Tahoma", Font.BOLD, 12));
@@ -646,6 +691,29 @@ public class LogInteraction extends JPanel {
 		formErrorPanel.setVisible(true);
 		formErrorPanel.revalidate();
 		formErrorPanel.repaint();
+	}
+
+	private void onFromRadio() {
+		RigController rig = RigController.getInstance();
+		if (rig.isConnected()) {
+			rig.disconnect();
+		} else {
+			new Thread(() -> {
+				boolean ok = rig.connect();
+				if (!ok) {
+					SwingUtilities.invokeLater(() -> {
+						lblRigStatus.setForeground(Color.RED);
+						lblRigStatus.setToolTipText("CAT rig control: connection failed");
+						javax.swing.JOptionPane.showMessageDialog(
+								LogInteraction.this.getMainWin(),
+								"Could not connect to radio.\n"
+								+ "Check your CAT settings under Tools \u2192 CAT Settings\u2026",
+								"CAT Connection Failed",
+								javax.swing.JOptionPane.WARNING_MESSAGE);
+					});
+				}
+			}, "RigConnect").start();
+		}
 	}
 
 	public void resetEntry() {

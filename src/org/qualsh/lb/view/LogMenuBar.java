@@ -76,18 +76,29 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 	
 	public LogMenuBar(JFrame frame) {
 		super();
-				
+
 		setMainFrame(frame);
-		
+
 		setMenuFile(new JMenu("File"));
 		add(getMenuFile());
-		
+
 		setMenuEdit(new JMenu("Edit"));
 		add(getMenuEdit());
 
+		JMenu menuTools = new JMenu("Tools");
+		add(menuTools);
+		JMenuItem menuItemCatSettings = new JMenuItem("CAT Settings\u2026");
+		menuItemCatSettings.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				CATSettingsDialog dlg = new CATSettingsDialog((JFrame) LogMenuBar.this.getMainFrame());
+				dlg.setVisible(true);
+			}
+		});
+		menuTools.add(menuItemCatSettings);
+
 		this.setMenuHelp(new JMenu("Help"));
 		add(this.getMenuHelp());
-		
+
 		this.setPrefDialog(new PreferencesDialog(this.getMainFrame()));
 		this.setAboutDialog(new AboutDialog(this.getMainFrame()));
 	}
