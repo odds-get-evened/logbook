@@ -601,9 +601,12 @@ public class DigitalModesWindow extends JFrame {
             updatePlaybackStatus(true);
         }
 
-        // Register waterfall listener for live capture audio (idempotent)
+        // Register waterfall listener for live capture audio (idempotent).
+        // Guard against file playback: when replaying a file the playback thread already
+        // feeds the waterfall directly, so we skip live capture to avoid concurrent
+        // unsynchronised access to the waterfall's internal filter state.
         if (waterfallCaptureListener == null && waterfallPanel != null) {
-            waterfallCaptureListener = waterfallPanel::feedPcm;
+            waterfallCaptureListener = chunk -> { if (!playingFile) waterfallPanel.feedPcm(chunk); };
             audio.addCaptureListener(waterfallCaptureListener);
         }
 
@@ -631,7 +634,7 @@ public class DigitalModesWindow extends JFrame {
                 while (!Thread.currentThread().isInterrupted()) {
                     try {
                         byte[] chunk = decoderQueue.poll(200, TimeUnit.MILLISECONDS);
-                        if (chunk != null && !transmitting && !playingFile) {
+                        if (chunk != null && !transmitting) {
                             router.play(chunk);
                         }
                     } catch (InterruptedException e) {
@@ -844,7 +847,6 @@ public class DigitalModesWindow extends JFrame {
         updateAudioControls();
 
         new Thread(() -> {
-            AudioRouter router = AudioRouter.getInstance();
             try {
                 do {
                     InputStream src = new ByteArrayInputStream(pcm);
@@ -860,7 +862,16 @@ public class DigitalModesWindow extends JFrame {
                         if (read > 0) {
                             byte[] chunk = new byte[read];
                             System.arraycopy(buf, 0, chunk, 0, read);
-                            router.play(chunk);
+                            // Route through the decoder queue so the decoder playback thread
+                            // delivers audio to WSJT-X/Fldigi, exactly as in live capture mode.
+                            // put() blocks when full, naturally rate-limiting to 48 kHz real-time.
+                            try {
+                                decoderQueue.put(chunk);
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                playingFile = false;
+                                break;
+                            }
                             if (waterfallPanel != null) waterfallPanel.feedPcm(chunk);
                         }
                     }
