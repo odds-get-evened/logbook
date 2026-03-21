@@ -3,6 +3,7 @@ package org.qualsh.lb.view;
 import org.qualsh.lb.App;
 import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.digital.*;
+import org.qualsh.lb.digital.RxMode;
 import org.qualsh.lb.digital.WsjtxUdpListener.QsoLoggedMessage;
 import org.qualsh.lb.digital.WsjtxUdpListener.StatusMessage;
 import org.qualsh.lb.log.Log;
@@ -87,6 +88,7 @@ public class DigitalModesWindow extends JFrame {
     // ── UI components ─────────────────────────────────────────────────────────
 
     private JComboBox<DigitalMode> comboMode;
+    private JComboBox<RxMode>     comboRxMode;
     private JLabel lblFrequency;
     private JLabel lblRigStatus;
     private JButton btnPtt;
@@ -218,12 +220,10 @@ public class DigitalModesWindow extends JFrame {
             SwingUtilities.invokeLater(() -> updateSelectionLabel(centerHz, bwHz))
         );
 
-        // Selection info bar
-        int initCtr = waterfallPanel.getCenterFreqHz();
-        int initBw  = waterfallPanel.getBandwidthHz();
-        lblSelectionInfo = new JLabel("BW: " + initBw + " Hz  |  Centre: " + initCtr
-                + " Hz  (" + (initCtr - initBw / 2) + "\u2013" + (initCtr + initBw / 2) + " Hz)");
+        // Selection info bar – built after waterfallPanel exists so getRxMode() works
+        lblSelectionInfo = new JLabel("");
         lblSelectionInfo.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+        updateSelectionLabel(waterfallPanel.getCenterFreqHz(), waterfallPanel.getBandwidthHz());
 
         JButton btnTune = new JButton("Tune to Selected");
         btnTune.setToolTipText(
@@ -247,6 +247,13 @@ public class DigitalModesWindow extends JFrame {
         comboMode = new JComboBox<>(DigitalMode.values());
         comboMode.setToolTipText("Select digital mode");
         tb.add(comboMode);
+
+        tb.add(Box.createHorizontalStrut(8));
+        tb.add(new JLabel("RX:"));
+        comboRxMode = new JComboBox<>(RxMode.values());
+        comboRxMode.setSelectedItem(RxMode.USB);
+        comboRxMode.setToolTipText("Receive mode — sets which side of the cursor the passband occupies");
+        tb.add(comboRxMode);
 
         tb.add(Box.createHorizontalStrut(16));
         tb.add(new JLabel("VFO-A:"));
@@ -423,6 +430,15 @@ public class DigitalModesWindow extends JFrame {
             if (mode != null && waterfallPanel != null) {
                 waterfallPanel.setSelection(mode.getAudioToneCentreHz(), 200);
                 updateSelectionLabel(mode.getAudioToneCentreHz(), 200);
+            }
+        });
+
+        // RX mode change → propagate to waterfall panel
+        comboRxMode.addActionListener(e -> {
+            RxMode rxm = (RxMode) comboRxMode.getSelectedItem();
+            if (rxm != null && waterfallPanel != null) {
+                waterfallPanel.setRxMode(rxm);
+                // Label update will arrive via the selectionListener callback
             }
         });
     }
@@ -852,8 +868,20 @@ public class DigitalModesWindow extends JFrame {
     }
 
     private void updateSelectionLabel(int centerHz, int bwHz) {
-        lblSelectionInfo.setText("BW: " + bwHz + " Hz  |  Centre: " + centerHz
-                + " Hz  (" + (centerHz - bwHz / 2) + "\u2013" + (centerHz + bwHz / 2) + " Hz)");
+        RxMode rxm = (waterfallPanel != null) ? waterfallPanel.getRxMode() : RxMode.USB;
+        int lo, hi;
+        if (rxm.isUpperSide()) {
+            lo = centerHz;
+            hi = centerHz + bwHz;
+        } else if (rxm.isLowerSide()) {
+            lo = centerHz - bwHz;
+            hi = centerHz;
+        } else {
+            lo = centerHz - bwHz / 2;
+            hi = centerHz + bwHz / 2;
+        }
+        lblSelectionInfo.setText(rxm.getLabel() + "  BW: " + bwHz + " Hz  |  Centre: "
+                + centerHz + " Hz  (" + lo + "\u2013" + hi + " Hz)");
     }
 
     private void updateRigStatus(boolean connected) {
