@@ -4,8 +4,6 @@ import org.qualsh.lb.App;
 import org.qualsh.lb.data.LogsModel;
 import org.qualsh.lb.digital.*;
 import org.qualsh.lb.digital.RxMode;
-import org.qualsh.lb.digital.WsjtxUdpListener.QsoLoggedMessage;
-import org.qualsh.lb.digital.WsjtxUdpListener.StatusMessage;
 import org.qualsh.lb.log.Log;
 import org.qualsh.lb.util.Preferences;
 
@@ -151,11 +149,22 @@ public class DigitalModesWindow extends JFrame {
     private volatile boolean monitorAudio = false;
     private JToggleButton btnMonitor;
 
-    // ── WSJT-X connection status ──────────────────────────────────────────────
+    // ── Decoder audio feed (filtered audio → playback device → decoder app) ──
 
-    private JLabel lblWsjtxStatus;
-    private volatile long lastWsjtxMessageMs = 0;
-    private ScheduledExecutorService wsjtxWatchdog;
+    /** Always-on queue that feeds filtered RX audio to the configured playback device. */
+    private ArrayBlockingQueue<byte[]> decoderQueue;
+    private Thread decoderPlaybackThread;
+
+    // ── Backend connection status ─────────────────────────────────────────────
+
+    /** Currently-active backend (WSJT-X or Fldigi), selected by mode. */
+    private DigitalModeBackend activeBackend;
+    private WsjtxUdpListener   wsjtxBackend;
+    private FldigiXmlRpcBackend fldigiBackend;
+
+    private JLabel lblBackendStatus;
+    private volatile long lastBackendMessageMs = 0;
+    private ScheduledExecutorService backendWatchdog;
 
     // ── Polling ───────────────────────────────────────────────────────────────
 
@@ -315,7 +324,7 @@ public class DigitalModesWindow extends JFrame {
         decodedTable.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         decodedTable.setRowHeight(18);
         JScrollPane spDecoded = new JScrollPane(decodedTable);
-        spDecoded.setBorder(new TitledBorder("Decoded Messages (from WSJT-X / JS8Call)"));
+        spDecoded.setBorder(new TitledBorder("Decoded Messages (live)"));
         spDecoded.setPreferredSize(new Dimension(0, 200));
 
         // ── Bottom: auto-logged QSOs ───────────────────────────────────────────
@@ -373,11 +382,11 @@ public class DigitalModesWindow extends JFrame {
         });
         sb.add(btnMonitor);
 
-        lblWsjtxStatus = new JLabel("\u25CB WSJT-X: waiting");
-        lblWsjtxStatus.setFont(lblWsjtxStatus.getFont().deriveFont(11f));
-        lblWsjtxStatus.setForeground(Color.GRAY);
-        lblWsjtxStatus.setToolTipText("Status of the WSJT-X / JS8Call UDP connection");
-        sb.add(lblWsjtxStatus);
+        lblBackendStatus = new JLabel("\u25CB Backend: waiting");
+        lblBackendStatus.setFont(lblBackendStatus.getFont().deriveFont(11f));
+        lblBackendStatus.setForeground(Color.GRAY);
+        lblBackendStatus.setToolTipText("Connection status of the active decoder backend (WSJT-X or Fldigi)");
+        sb.add(lblBackendStatus);
 
         sb.add(new JSeparator(JSeparator.VERTICAL));
 
@@ -446,23 +455,14 @@ public class DigitalModesWindow extends JFrame {
             SwingUtilities.invokeLater(() -> updateFrequencyLabel(freqKhz))
         );
 
-        // WSJT-X Status (live decoded lines)
-        WsjtxUdpListener.getInstance().addStatusListener(msg ->
-            SwingUtilities.invokeLater(() -> handleWsjtxStatus(msg))
-        );
-
-        // WSJT-X QSO-Logged (Type 5) → auto-log
-        WsjtxUdpListener.getInstance().addQsoLoggedListener(msg ->
-            SwingUtilities.invokeLater(() -> handleQsoLogged(msg))
-        );
-
-        // Mode change → update waterfall default selection to mode's tone centre
+        // Mode change → update waterfall selection + switch active backend
         comboMode.addActionListener(e -> {
             DigitalMode mode = (DigitalMode) comboMode.getSelectedItem();
             if (mode != null && waterfallPanel != null) {
                 waterfallPanel.setSelection(mode.getAudioToneCentreHz(), 200);
                 updateSelectionLabel(mode.getAudioToneCentreHz(), 200);
             }
+            if (mode != null) switchBackend(mode);
         });
 
         // RX mode change → propagate to waterfall panel
@@ -478,8 +478,8 @@ public class DigitalModesWindow extends JFrame {
     // ── Start-up ──────────────────────────────────────────────────────────────
 
     private void loadPrefsAndStart() {
-        // Start WSJT-X UDP listener
-        startWsjtxListener();
+        // Start both decoder backends
+        startBackends();
 
         // Start audio routing
         startAudio();
@@ -487,17 +487,17 @@ public class DigitalModesWindow extends JFrame {
         // Open PTT port
         PttController.getInstance().openPttPort();
 
-        // Watchdog: mark WSJT-X as "waiting" if no message received in 30 s
-        if (wsjtxWatchdog == null || wsjtxWatchdog.isShutdown()) {
-            wsjtxWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "DigitalModesWin-wsjtxWatchdog");
+        // Watchdog: mark backend as "waiting" if no message received in 30 s
+        if (backendWatchdog == null || backendWatchdog.isShutdown()) {
+            backendWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "DigitalModesWin-backendWatchdog");
                 t.setDaemon(true);
                 return t;
             });
-            wsjtxWatchdog.scheduleAtFixedRate(() -> {
-                long age = System.currentTimeMillis() - lastWsjtxMessageMs;
-                boolean connected = (lastWsjtxMessageMs > 0) && (age < 30_000);
-                SwingUtilities.invokeLater(() -> updateWsjtxStatus(connected));
+            backendWatchdog.scheduleAtFixedRate(() -> {
+                long age = System.currentTimeMillis() - lastBackendMessageMs;
+                boolean connected = (lastBackendMessageMs > 0) && (age < 30_000);
+                SwingUtilities.invokeLater(() -> updateBackendStatus(connected));
             }, 5, 5, TimeUnit.SECONDS);
         }
 
@@ -512,26 +512,71 @@ public class DigitalModesWindow extends JFrame {
         }
     }
 
-    private void startWsjtxListener() {
-        WsjtxUdpListener udp = WsjtxUdpListener.getInstance();
+    private void startBackends() {
+        // ── WSJT-X / JS8Call UDP backend ─────────────────────────────────────
+        wsjtxBackend = WsjtxUdpListener.getInstance();
 
-        // Parse WSJT-X port
-        String wsjtxPortStr = Preferences.getOne(Preferences.PREF_DIGITAL_WSJTX_UDP_PORT);
-        int wsjtxPort = WsjtxUdpListener.DEFAULT_PORT;
-        if (wsjtxPortStr != null && !wsjtxPortStr.isEmpty()) {
-            try { wsjtxPort = Integer.parseInt(wsjtxPortStr); } catch (NumberFormatException ignored) {}
-        }
+        wsjtxBackend.addStatusListener(evt -> {
+            if (wsjtxBackend == activeBackend) lastBackendMessageMs = System.currentTimeMillis();
+            SwingUtilities.invokeLater(() -> { if (wsjtxBackend == activeBackend) handleStatusEvent(evt); });
+        });
+        wsjtxBackend.addQsoLoggedListener(evt ->
+            SwingUtilities.invokeLater(() -> handleQsoLogged(evt))
+        );
+        wsjtxBackend.addDecodedLineListener(line ->
+            SwingUtilities.invokeLater(() -> handleDecodedLine(line))
+        );
 
-        if (!udp.isRunning()) {
-            boolean ok = udp.start(wsjtxPort);
-            if (!ok) {
-                // Try JS8Call port as fallback
-                String js8PortStr = Preferences.getOne(Preferences.PREF_DIGITAL_JS8CALL_UDP_PORT);
+        if (!wsjtxBackend.isRunning()) {
+            String portStr = Preferences.getOne(Preferences.PREF_DIGITAL_WSJTX_UDP_PORT);
+            int port = WsjtxUdpListener.DEFAULT_PORT;
+            try { if (portStr != null) port = Integer.parseInt(portStr); } catch (NumberFormatException ignored) {}
+            if (!wsjtxBackend.start(port)) {
+                String js8Str = Preferences.getOne(Preferences.PREF_DIGITAL_JS8CALL_UDP_PORT);
                 int js8Port = WsjtxUdpListener.JS8CALL_PORT;
-                try { js8Port = Integer.parseInt(js8PortStr); } catch (Exception ignored) {}
-                udp.start(js8Port);
+                try { if (js8Str != null) js8Port = Integer.parseInt(js8Str); } catch (NumberFormatException ignored) {}
+                wsjtxBackend.start(js8Port);
             }
         }
+
+        // ── Fldigi XML-RPC backend ────────────────────────────────────────────
+        fldigiBackend = FldigiXmlRpcBackend.getInstance();
+
+        fldigiBackend.addStatusListener(evt -> {
+            if (fldigiBackend == activeBackend) lastBackendMessageMs = System.currentTimeMillis();
+            SwingUtilities.invokeLater(() -> { if (fldigiBackend == activeBackend) handleStatusEvent(evt); });
+        });
+        fldigiBackend.addQsoLoggedListener(evt ->
+            SwingUtilities.invokeLater(() -> handleQsoLogged(evt))
+        );
+        fldigiBackend.addDecodedLineListener(line ->
+            SwingUtilities.invokeLater(() -> handleDecodedLine(line))
+        );
+
+        String fldigiHost = Preferences.getOne(Preferences.PREF_DIGITAL_FLDIGI_HOST);
+        String fldigiPortStr = Preferences.getOne(Preferences.PREF_DIGITAL_FLDIGI_PORT);
+        int fldigiPort = FldigiXmlRpcBackend.DEFAULT_PORT;
+        try { if (fldigiPortStr != null) fldigiPort = Integer.parseInt(fldigiPortStr); } catch (NumberFormatException ignored) {}
+        if (fldigiHost != null && !fldigiHost.isEmpty()) fldigiBackend.setHost(fldigiHost);
+
+        if (!fldigiBackend.isRunning()) fldigiBackend.start(fldigiPort);
+
+        // ── Select initial active backend from the currently-selected mode ────
+        DigitalMode mode = (DigitalMode) comboMode.getSelectedItem();
+        switchBackend(mode != null ? mode : DigitalMode.FT8);
+    }
+
+    /**
+     * Switch the active backend to match the given mode.
+     * Updates {@link #activeBackend} and resets the connection-status watchdog counter.
+     */
+    private void switchBackend(DigitalMode mode) {
+        DigitalModeBackend next = (mode.getBackendType() == DigitalMode.BackendType.FLDIGI)
+                ? fldigiBackend : wsjtxBackend;
+        if (next == activeBackend) return;
+        activeBackend = next;
+        lastBackendMessageMs = 0; // reset so watchdog starts fresh for the new backend
+        SwingUtilities.invokeLater(() -> updateBackendStatus(false));
     }
 
     private void startAudio() {
@@ -562,17 +607,45 @@ public class DigitalModesWindow extends JFrame {
             audio.addCaptureListener(waterfallCaptureListener);
         }
 
-        // Set up monitor audio: filtered output from the waterfall → playback device
-        if (monitorQueue == null) {
-            monitorQueue = new ArrayBlockingQueue<>(16);
-        }
+        // Set up audio queues: filtered waterfall output → playback device (always)
+        // and optionally → monitor speaker (when Monitor toggle is on).
+        if (monitorQueue == null)  monitorQueue  = new ArrayBlockingQueue<>(16);
+        if (decoderQueue == null)  decoderQueue  = new ArrayBlockingQueue<>(32);
+
         if (waterfallPanel != null) {
             waterfallPanel.setFilteredOutputListener(chunk -> {
+                if (!transmitting && !playingFile) {
+                    decoderQueue.offer(chunk); // always feeds decoder app via playback device
+                }
                 if (monitorAudio && !playingFile) {
-                    monitorQueue.offer(chunk); // drop if queue is full to avoid backup
+                    monitorQueue.offer(chunk); // only when monitor is toggled on
                 }
             });
         }
+
+        // Decoder playback thread: always routes filtered RX audio to the playback device
+        // so the external decoder app (WSJT-X / Fldigi) receives the passband-filtered signal.
+        if (decoderPlaybackThread == null || !decoderPlaybackThread.isAlive()) {
+            decoderPlaybackThread = new Thread(() -> {
+                AudioRouter router = AudioRouter.getInstance();
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        byte[] chunk = decoderQueue.poll(200, TimeUnit.MILLISECONDS);
+                        if (chunk != null && !transmitting && !playingFile) {
+                            router.play(chunk);
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }, "DigitalModesWin-decoderPlayback");
+            decoderPlaybackThread.setDaemon(true);
+            decoderPlaybackThread.start();
+        }
+
+        // Monitor playback thread: routes filtered audio to the playback device only when
+        // Monitor is enabled. (Will be separated to a distinct speaker device in a future update.)
         if (monitorPlaybackThread == null || !monitorPlaybackThread.isAlive()) {
             monitorPlaybackThread = new Thread(() -> {
                 AudioRouter router = AudioRouter.getInstance();
@@ -858,14 +931,13 @@ public class DigitalModesWindow extends JFrame {
      * gives us the current dial frequency and transmit state so we can keep
      * the window in sync even when the user operates WSJT-X directly.
      */
-    private void handleWsjtxStatus(StatusMessage msg) {
-        if (msg.dialFreqHz() > 0) {
-            updateFrequencyLabel(msg.dialFreqHz() / 1000.0);
+    private void handleStatusEvent(StatusEvent evt) {
+        if (evt.dialFreqHz() > 0) {
+            updateFrequencyLabel(evt.dialFreqHz() / 1000.0);
         }
-        updatePttButton(msg.transmitting());
-        transmitting = msg.transmitting();
-        lastWsjtxMessageMs = System.currentTimeMillis();
-        updateWsjtxStatus(true);
+        updatePttButton(evt.transmitting());
+        transmitting = evt.transmitting();
+        updateBackendStatus(true);
     }
 
     /**
@@ -874,9 +946,13 @@ public class DigitalModesWindow extends JFrame {
      * <p>The description string is formatted as:
      * <pre>  [FT8] W1AW EM72 RST: -10/-12  WSJT-X auto</pre>
      */
-    private void handleQsoLogged(QsoLoggedMessage msg) {
-        lastWsjtxMessageMs = System.currentTimeMillis();
-        updateWsjtxStatus(true);
+    private void handleQsoLogged(AutoLogEvent msg) {
+        // Mark the backend that sent this event as live
+        if (activeBackend != null) {
+            lastBackendMessageMs = System.currentTimeMillis();
+            updateBackendStatus(true);
+        }
+
         // Always add to the session table
         String timeStr = msg.dateOn() != null
                 ? msg.dateOn().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
@@ -903,7 +979,7 @@ public class DigitalModesWindow extends JFrame {
 
         Log log = new Log();
         log.setFrequency((float) msg.dialFreqKhz());
-        log.setMode(msg.mode() != null ? msg.mode() : "FT8");
+        log.setMode(msg.mode() != null ? msg.mode() : "DIGI");
         log.setDescription(buildDescription(msg));
 
         // dateOn as Unix timestamp
@@ -924,7 +1000,23 @@ public class DigitalModesWindow extends JFrame {
         logsModel.insert(log);
     }
 
-    private String buildDescription(QsoLoggedMessage msg) {
+    private void handleDecodedLine(DecodedLine line) {
+        decodedModel.insertRow(0, new Object[]{
+                line.time()   != null ? line.time().format(DateTimeFormatter.ofPattern("HH:mm:ss")) : "?",
+                line.call(),
+                line.grid(),
+                line.snr()    != null ? String.valueOf(line.snr()) : "",
+                line.dt()     != null ? String.format("%.1f", line.dt()) : "",
+                line.freqHz() != null ? String.format("%.0f", line.freqHz()) : "",
+                line.message()
+        });
+        // Keep at most 500 rows
+        while (decodedModel.getRowCount() > 500) {
+            decodedModel.removeRow(decodedModel.getRowCount() - 1);
+        }
+    }
+
+    private String buildDescription(AutoLogEvent msg) {
         StringBuilder sb = new StringBuilder();
         sb.append("[").append(msg.mode() != null ? msg.mode() : "DIGI").append("] ");
         if (msg.dxCall() != null && !msg.dxCall().isEmpty()) sb.append(msg.dxCall()).append(" ");
@@ -935,7 +1027,8 @@ public class DigitalModesWindow extends JFrame {
         }
         if (msg.name() != null && !msg.name().isEmpty()) sb.append(msg.name()).append(" ");
         if (msg.comments() != null && !msg.comments().isEmpty()) sb.append(msg.comments()).append(" ");
-        sb.append("(WSJT-X auto)");
+        String src = msg.source() != null ? msg.source() : "auto";
+        sb.append("(").append(src).append(")");
         return sb.toString().trim();
     }
 
@@ -989,13 +1082,14 @@ public class DigitalModesWindow extends JFrame {
         lblCaptureStatus.setForeground(active ? new Color(0, 130, 0) : Color.GRAY);
     }
 
-    private void updateWsjtxStatus(boolean connected) {
+    private void updateBackendStatus(boolean connected) {
+        String backendName = (activeBackend != null) ? activeBackend.name() : "Backend";
         if (connected) {
-            lblWsjtxStatus.setText("\u25CF WSJT-X: connected");
-            lblWsjtxStatus.setForeground(new Color(0, 180, 0));
+            lblBackendStatus.setText("\u25CF " + backendName + ": connected");
+            lblBackendStatus.setForeground(new Color(0, 180, 0));
         } else {
-            lblWsjtxStatus.setText("\u25CB WSJT-X: waiting");
-            lblWsjtxStatus.setForeground(Color.GRAY);
+            lblBackendStatus.setText("\u25CB " + backendName + ": waiting");
+            lblBackendStatus.setForeground(Color.GRAY);
         }
     }
 
@@ -1023,21 +1117,23 @@ public class DigitalModesWindow extends JFrame {
         }
     }
 
-    /** Register a JVM shutdown hook to stop audio + UDP. */
+    /** Register a JVM shutdown hook to stop audio + backends. */
     public void registerShutdownHook() {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             playingFile    = false;
             playbackPaused = false;
             monitorAudio   = false;
-            if (monitorPlaybackThread != null) monitorPlaybackThread.interrupt();
-            if (wsjtxWatchdog != null) wsjtxWatchdog.shutdownNow();
+            if (monitorPlaybackThread  != null) monitorPlaybackThread.interrupt();
+            if (decoderPlaybackThread  != null) decoderPlaybackThread.interrupt();
+            if (backendWatchdog        != null) backendWatchdog.shutdownNow();
             if (waterfallCaptureListener != null) {
                 AudioRouter.getInstance().removeCaptureListener(waterfallCaptureListener);
             }
             if (waterfallPanel != null) waterfallPanel.setFilteredOutputListener(null);
             AudioRouter.getInstance().stopCapture();
             AudioRouter.getInstance().closePlayback();
-            WsjtxUdpListener.getInstance().stop();
+            if (wsjtxBackend   != null) wsjtxBackend.stop();
+            if (fldigiBackend  != null) fldigiBackend.stop();
             PttController.getInstance().closePttPort();
         }, "DigitalModesWindow-shutdown"));
     }
