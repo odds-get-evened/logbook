@@ -150,6 +150,19 @@ public class SpectrumWaterfallPanel extends JPanel {
     /** Threshold above which a signal is considered present in the passband. */
     private static final float SIGNAL_THRESHOLD_DB = -65f;
 
+    /**
+     * EMA alpha for the signal-presence indicator.
+     * alpha ≈ 0.15 gives a ~140 ms time-constant at the ~21 ms/hop rate, which
+     * smooths out single-frame noise spikes while still responding within ~300 ms.
+     */
+    private static final float SIGNAL_SMOOTH_ALPHA = 0.15f;
+
+    /**
+     * Exponentially-smoothed passband level used <em>only</em> for the signal-presence
+     * indicator.  Written from the audio capture thread, read from the EDT; must be volatile.
+     */
+    private volatile float smoothedPassbandDb = -100f;
+
     // ── Constructor ───────────────────────────────────────────────────────────
 
     public SpectrumWaterfallPanel() {
@@ -344,6 +357,12 @@ public class SpectrumWaterfallPanel extends JPanel {
     public float getPassbandAvgDb() { return passbandAvgDb; }
 
     /**
+     * Returns {@code true} if a sustained signal is currently detected in the passband.
+     * Uses the EMA-smoothed level, so transient noise spikes do not trigger a positive result.
+     */
+    public boolean isSignalPresent() { return smoothedPassbandDb > SIGNAL_THRESHOLD_DB; }
+
+    /**
      * Set the dB range used for color-mapping the waterfall.
      *
      * @param minDb signals at or below this level map to the coldest color
@@ -396,6 +415,8 @@ public class SpectrumWaterfallPanel extends JPanel {
         float dbSum = 0f; int dbCount = 0;
         for (int i = binLo; i <= binHi; i++) { dbSum += db[i]; dbCount++; }
         passbandAvgDb = (dbCount > 0) ? dbSum / dbCount : -100f;
+        smoothedPassbandDb = SIGNAL_SMOOTH_ALPHA * passbandAvgDb
+                           + (1f - SIGNAL_SMOOTH_ALPHA) * smoothedPassbandDb;
 
         addWaterfallLine(db);
         SwingUtilities.invokeLater(this::repaint);
@@ -622,8 +643,8 @@ public class SpectrumWaterfallPanel extends JPanel {
         g.setColor(new Color(180, 230, 255));
         g.drawString(bwLabel, bwX, 14);
 
-        // Signal detection indicator – shown below the BW label when signal is present
-        boolean signalPresent = passbandAvgDb > SIGNAL_THRESHOLD_DB;
+        // Signal detection indicator – uses the smoothed level to avoid rapid flickering
+        boolean signalPresent = smoothedPassbandDb > SIGNAL_THRESHOLD_DB;
         String sigLabel = signalPresent ? "\u25CF SIGNAL" : "\u25CB quiet";
         Color  sigColor = signalPresent ? new Color(0, 255, 120) : new Color(80, 80, 80);
         FontMetrics fmSig = g.getFontMetrics();
