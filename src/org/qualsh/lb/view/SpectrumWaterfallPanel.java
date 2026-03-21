@@ -7,6 +7,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /**
  * SpectrumWaterfallPanel – real-time FFT spectrum analyser + scrolling waterfall.
@@ -128,6 +129,26 @@ public class SpectrumWaterfallPanel extends JPanel {
 
     /** Called with (centerHz, bandwidthHz) whenever the selection changes. */
     private BiConsumer<Integer, Integer> selectionListener;
+
+    // ── Filtered audio output ─────────────────────────────────────────────────
+
+    /**
+     * When non-null, receives filtered PCM audio chunks (16-bit LE mono, 48 kHz)
+     * reflecting the current bandpass selection.  Called from the capture thread.
+     */
+    private volatile Consumer<byte[]> filteredOutputListener;
+
+    /** Accumulate filtered float samples before converting and emitting. */
+    private final float[] filteredOutBuf = new float[HOP_SIZE];
+    private int filteredOutPos = 0;
+
+    // ── Passband signal level ─────────────────────────────────────────────────
+
+    /** Average dB level within the current passband, updated each FFT frame. */
+    private volatile float passbandAvgDb = -100f;
+
+    /** Threshold above which a signal is considered present in the passband. */
+    private static final float SIGNAL_THRESHOLD_DB = -65f;
 
     // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -258,6 +279,13 @@ public class SpectrumWaterfallPanel extends JPanel {
                 ringBuf[ringPos] = raw;
             }
 
+            // Accumulate filtered sample for audio output
+            filteredOutBuf[filteredOutPos++] = ringBuf[ringPos];
+            if (filteredOutPos >= filteredOutBuf.length) {
+                emitFilteredAudio();
+                filteredOutPos = 0;
+            }
+
             ringPos = (ringPos + 1) % FFT_SIZE;
             if (++newSamplesCount >= HOP_SIZE) {
                 newSamplesCount = 0;
@@ -303,6 +331,19 @@ public class SpectrumWaterfallPanel extends JPanel {
     }
 
     /**
+     * Register a listener that receives bandpass-filtered PCM audio.
+     * The chunks match {@link org.qualsh.lb.digital.AudioRouter#FORMAT}
+     * (16-bit LE mono 48 kHz).  Called from the audio-capture thread.
+     * Pass {@code null} to disable.
+     */
+    public void setFilteredOutputListener(Consumer<byte[]> listener) {
+        this.filteredOutputListener = listener;
+    }
+
+    /** @return Average dB level within the current passband (updated each FFT frame). */
+    public float getPassbandAvgDb() { return passbandAvgDb; }
+
+    /**
      * Set the dB range used for color-mapping the waterfall.
      *
      * @param minDb signals at or below this level map to the coldest color
@@ -337,6 +378,25 @@ public class SpectrumWaterfallPanel extends JPanel {
         }
 
         spectrumDb = db;
+
+        // Compute average dB within the current passband for signal detection
+        int pLo, pHi;
+        if (rxMode.isUpperSide()) {
+            pLo = centerFreqHz; pHi = centerFreqHz + bandwidthHz;
+        } else if (rxMode.isLowerSide()) {
+            pLo = centerFreqHz - bandwidthHz; pHi = centerFreqHz;
+        } else {
+            pLo = centerFreqHz - bandwidthHz / 2; pHi = centerFreqHz + bandwidthHz / 2;
+        }
+        pLo = Math.max(0, pLo); pHi = Math.min((int) MAX_FREQ_HZ, pHi);
+        int binLo = (int) ((float) pLo / SAMPLE_RATE * FFT_SIZE);
+        int binHi = (int) ((float) pHi / SAMPLE_RATE * FFT_SIZE);
+        binLo = Math.max(0, Math.min(numBins - 1, binLo));
+        binHi = Math.max(binLo, Math.min(numBins - 1, binHi));
+        float dbSum = 0f; int dbCount = 0;
+        for (int i = binLo; i <= binHi; i++) { dbSum += db[i]; dbCount++; }
+        passbandAvgDb = (dbCount > 0) ? dbSum / dbCount : -100f;
+
         addWaterfallLine(db);
         SwingUtilities.invokeLater(this::repaint);
     }
@@ -561,6 +621,24 @@ public class SpectrumWaterfallPanel extends JPanel {
         g.fillRect(bwX - 2, 4, bwLabelW + 4, 13);
         g.setColor(new Color(180, 230, 255));
         g.drawString(bwLabel, bwX, 14);
+
+        // Signal detection indicator – shown below the BW label when signal is present
+        boolean signalPresent = passbandAvgDb > SIGNAL_THRESHOLD_DB;
+        String sigLabel = signalPresent ? "\u25CF SIGNAL" : "\u25CB quiet";
+        Color  sigColor = signalPresent ? new Color(0, 255, 120) : new Color(80, 80, 80);
+        FontMetrics fmSig = g.getFontMetrics();
+        int sigLabelW = fmSig.stringWidth(sigLabel);
+        int sigX = w - sigLabelW - 4;
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRect(sigX - 2, 19, sigLabelW + 4, 13);
+        g.setColor(sigColor);
+        g.drawString(sigLabel, sigX, 29);
+
+        // When signal is present, brighten the band overlay on the spectrum
+        if (signalPresent && bandW > 0) {
+            g.setColor(new Color(0, 255, 120, 30));
+            g.fillRect(bandLeft, 0, bandW, SPECTRUM_HEIGHT);
+        }
     }
 
     // ── Cursor management ─────────────────────────────────────────────────────
@@ -647,6 +725,25 @@ public class SpectrumWaterfallPanel extends JPanel {
         );
         // Reset delay lines to avoid a transient on the spectrum display
         flt_x1 = flt_x2 = flt_y1 = flt_y2 = 0.0;
+    }
+
+    // ── Filtered audio emission ───────────────────────────────────────────────
+
+    /**
+     * Convert {@link #filteredOutBuf} to 16-bit PCM and fire
+     * {@link #filteredOutputListener}.  Called from the capture thread.
+     */
+    private void emitFilteredAudio() {
+        Consumer<byte[]> l = filteredOutputListener;
+        if (l == null) return;
+        byte[] out = new byte[filteredOutBuf.length * 2];
+        for (int i = 0; i < filteredOutBuf.length; i++) {
+            short s = (short) Math.max(-32768, Math.min(32767,
+                    (int) (filteredOutBuf[i] * 32767f)));
+            out[i * 2]     = (byte) (s & 0xFF);
+            out[i * 2 + 1] = (byte) ((s >> 8) & 0xFF);
+        }
+        l.accept(out);
     }
 
     // ── Waterfall rebuild ─────────────────────────────────────────────────────

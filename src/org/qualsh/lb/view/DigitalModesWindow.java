@@ -21,6 +21,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -141,6 +142,20 @@ public class DigitalModesWindow extends JFrame {
     // ── Current dial frequency (kHz) for tune-to-selected ────────────────────
 
     private volatile double currentFreqKhz = 0.0;
+
+    // ── Monitor audio (filtered live audio to speaker) ────────────────────────
+
+    /** Queue between capture thread (producer) and monitor playback thread (consumer). */
+    private ArrayBlockingQueue<byte[]> monitorQueue;
+    private Thread monitorPlaybackThread;
+    private volatile boolean monitorAudio = false;
+    private JToggleButton btnMonitor;
+
+    // ── WSJT-X connection status ──────────────────────────────────────────────
+
+    private JLabel lblWsjtxStatus;
+    private volatile long lastWsjtxMessageMs = 0;
+    private ScheduledExecutorService wsjtxWatchdog;
 
     // ── Polling ───────────────────────────────────────────────────────────────
 
@@ -349,6 +364,23 @@ public class DigitalModesWindow extends JFrame {
 
         sb.add(new JSeparator(JSeparator.VERTICAL));
 
+        btnMonitor = new JToggleButton("\uD83D\uDD0A Monitor");
+        btnMonitor.setToolTipText(
+                "Route bandpass-filtered receive audio to the selected output device");
+        btnMonitor.addActionListener(e -> {
+            monitorAudio = btnMonitor.isSelected();
+            if (!monitorAudio && monitorQueue != null) monitorQueue.clear();
+        });
+        sb.add(btnMonitor);
+
+        lblWsjtxStatus = new JLabel("\u25CB WSJT-X: waiting");
+        lblWsjtxStatus.setFont(lblWsjtxStatus.getFont().deriveFont(11f));
+        lblWsjtxStatus.setForeground(Color.GRAY);
+        lblWsjtxStatus.setToolTipText("Status of the WSJT-X / JS8Call UDP connection");
+        sb.add(lblWsjtxStatus);
+
+        sb.add(new JSeparator(JSeparator.VERTICAL));
+
         btnRecord = new JButton("\u25CF Record");
         btnRecord.setToolTipText("Record incoming audio to a WAV file");
         btnRecord.addActionListener(e -> onToggleRecording());
@@ -455,6 +487,20 @@ public class DigitalModesWindow extends JFrame {
         // Open PTT port
         PttController.getInstance().openPttPort();
 
+        // Watchdog: mark WSJT-X as "waiting" if no message received in 30 s
+        if (wsjtxWatchdog == null || wsjtxWatchdog.isShutdown()) {
+            wsjtxWatchdog = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "DigitalModesWin-wsjtxWatchdog");
+                t.setDaemon(true);
+                return t;
+            });
+            wsjtxWatchdog.scheduleAtFixedRate(() -> {
+                long age = System.currentTimeMillis() - lastWsjtxMessageMs;
+                boolean connected = (lastWsjtxMessageMs > 0) && (age < 30_000);
+                SwingUtilities.invokeLater(() -> updateWsjtxStatus(connected));
+            }, 5, 5, TimeUnit.SECONDS);
+        }
+
         // Connect to rig if settings are available
         if (!RadioService.getInstance().isConnected()) {
             new Thread(() -> {
@@ -514,6 +560,36 @@ public class DigitalModesWindow extends JFrame {
         if (waterfallCaptureListener == null && waterfallPanel != null) {
             waterfallCaptureListener = waterfallPanel::feedPcm;
             audio.addCaptureListener(waterfallCaptureListener);
+        }
+
+        // Set up monitor audio: filtered output from the waterfall → playback device
+        if (monitorQueue == null) {
+            monitorQueue = new ArrayBlockingQueue<>(16);
+        }
+        if (waterfallPanel != null) {
+            waterfallPanel.setFilteredOutputListener(chunk -> {
+                if (monitorAudio && !playingFile) {
+                    monitorQueue.offer(chunk); // drop if queue is full to avoid backup
+                }
+            });
+        }
+        if (monitorPlaybackThread == null || !monitorPlaybackThread.isAlive()) {
+            monitorPlaybackThread = new Thread(() -> {
+                AudioRouter router = AudioRouter.getInstance();
+                while (!Thread.currentThread().isInterrupted()) {
+                    try {
+                        byte[] chunk = monitorQueue.poll(200, TimeUnit.MILLISECONDS);
+                        if (chunk != null && monitorAudio && !playingFile) {
+                            router.play(chunk);
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }, "DigitalModesWin-monitorPlayback");
+            monitorPlaybackThread.setDaemon(true);
+            monitorPlaybackThread.start();
         }
     }
 
@@ -788,6 +864,8 @@ public class DigitalModesWindow extends JFrame {
         }
         updatePttButton(msg.transmitting());
         transmitting = msg.transmitting();
+        lastWsjtxMessageMs = System.currentTimeMillis();
+        updateWsjtxStatus(true);
     }
 
     /**
@@ -797,6 +875,8 @@ public class DigitalModesWindow extends JFrame {
      * <pre>  [FT8] W1AW EM72 RST: -10/-12  WSJT-X auto</pre>
      */
     private void handleQsoLogged(QsoLoggedMessage msg) {
+        lastWsjtxMessageMs = System.currentTimeMillis();
+        updateWsjtxStatus(true);
         // Always add to the session table
         String timeStr = msg.dateOn() != null
                 ? msg.dateOn().format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
@@ -909,6 +989,16 @@ public class DigitalModesWindow extends JFrame {
         lblCaptureStatus.setForeground(active ? new Color(0, 130, 0) : Color.GRAY);
     }
 
+    private void updateWsjtxStatus(boolean connected) {
+        if (connected) {
+            lblWsjtxStatus.setText("\u25CF WSJT-X: connected");
+            lblWsjtxStatus.setForeground(new Color(0, 180, 0));
+        } else {
+            lblWsjtxStatus.setText("\u25CB WSJT-X: waiting");
+            lblWsjtxStatus.setForeground(Color.GRAY);
+        }
+    }
+
     private void updatePlaybackStatus(boolean active) {
         lblPlaybackStatus.setText("\u25CF Playback: " + (active ? "on" : "off"));
         lblPlaybackStatus.setForeground(active ? new Color(0, 130, 0) : Color.GRAY);
@@ -938,9 +1028,13 @@ public class DigitalModesWindow extends JFrame {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             playingFile    = false;
             playbackPaused = false;
+            monitorAudio   = false;
+            if (monitorPlaybackThread != null) monitorPlaybackThread.interrupt();
+            if (wsjtxWatchdog != null) wsjtxWatchdog.shutdownNow();
             if (waterfallCaptureListener != null) {
                 AudioRouter.getInstance().removeCaptureListener(waterfallCaptureListener);
             }
+            if (waterfallPanel != null) waterfallPanel.setFilteredOutputListener(null);
             AudioRouter.getInstance().stopCapture();
             AudioRouter.getInstance().closePlayback();
             WsjtxUdpListener.getInstance().stop();
