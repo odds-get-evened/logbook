@@ -1,5 +1,7 @@
 package org.qualsh.lb.view;
 
+import org.qualsh.lb.digital.RxMode;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -84,6 +86,11 @@ public class SpectrumWaterfallPanel extends JPanel {
     /** Waterfall scroll image (width=panel width, height=panel height−SPECTRUM_HEIGHT). */
     private BufferedImage waterfallImg;
     private final Object  imgLock = new Object();
+
+    // ── Receive mode ──────────────────────────────────────────────────────────
+
+    /** Current demodulation mode; controls filter placement and passband display. */
+    private RxMode rxMode = RxMode.USB;
 
     // ── Frequency selection ────────────────────────────────────────────────────
 
@@ -185,11 +192,17 @@ public class SpectrumWaterfallPanel extends JPanel {
 
                     case LOW_EDGE:
                     case HIGH_EDGE: {
-                        // Expand/contract bandwidth symmetrically around the fixed
-                        // centre frequency.  Both edges move together so the centre
-                        // never shifts during a bandwidth adjustment.
-                        int halfBw = Math.abs(freq - centerFreqHz);
-                        bandwidthHz = Math.max(10, halfBw * 2);
+                        if (rxMode.isUpperSide()) {
+                            // USB: passband extends right of centre; right drag sets width
+                            bandwidthHz = Math.max(10, freq - centerFreqHz);
+                        } else if (rxMode.isLowerSide()) {
+                            // LSB: passband extends left of centre; left drag sets width
+                            bandwidthHz = Math.max(10, centerFreqHz - freq);
+                        } else {
+                            // AM / DSB / CW: symmetric, both edges move together
+                            int halfBw = Math.abs(freq - centerFreqHz);
+                            bandwidthHz = Math.max(10, halfBw * 2);
+                        }
                         break;
                     }
 
@@ -252,6 +265,20 @@ public class SpectrumWaterfallPanel extends JPanel {
             }
         }
     }
+
+    /**
+     * Set the receive demodulation mode.
+     * Updates the filter placement and passband display immediately.
+     */
+    public void setRxMode(RxMode mode) {
+        this.rxMode = mode;
+        recomputeFilter();
+        fireSelection();
+        repaint();
+    }
+
+    /** @return Currently active receive mode. */
+    public RxMode getRxMode() { return rxMode; }
 
     /** Set the current frequency selection programmatically. */
     public void setSelection(int centerHz, int bwHz) {
@@ -475,24 +502,40 @@ public class SpectrumWaterfallPanel extends JPanel {
     }
 
     private void drawSelection(Graphics2D g, int w, int h, int scaleH) {
-        int cx   = freqToX(centerFreqHz, w);
-        int half = (int) ((float) bandwidthHz / 2f / MAX_FREQ_HZ * w);
+        int cx     = freqToX(centerFreqHz, w);
+        int bwPx   = (int) ((float) bandwidthHz / MAX_FREQ_HZ * w);
         int waterfallTop = SPECTRUM_HEIGHT;
         int waterfallBot = h - scaleH;
 
+        // Determine passband pixel bounds based on RX mode
+        int bandLeft, bandRight;
+        if (rxMode.isUpperSide()) {
+            bandLeft  = cx;
+            bandRight = cx + bwPx;
+        } else if (rxMode.isLowerSide()) {
+            bandLeft  = cx - bwPx;
+            bandRight = cx;
+        } else {
+            // AM / DSB / CW – symmetric
+            int half  = bwPx / 2;
+            bandLeft  = cx - half;
+            bandRight = cx + half;
+        }
+        int bandW = bandRight - bandLeft;
+
         // Semi-transparent band overlay on spectrum
         g.setColor(new Color(255, 220, 0, 35));
-        g.fillRect(cx - half, 0, 2 * half, SPECTRUM_HEIGHT);
+        g.fillRect(bandLeft, 0, bandW, SPECTRUM_HEIGHT);
 
         // Semi-transparent band on waterfall
         g.setColor(new Color(255, 220, 0, 45));
-        g.fillRect(cx - half, waterfallTop, 2 * half, waterfallBot - waterfallTop);
+        g.fillRect(bandLeft, waterfallTop, bandW, waterfallBot - waterfallTop);
 
         // Band edge lines on waterfall
-        if (half > 0) {
+        if (bandW > 0) {
             g.setColor(new Color(200, 180, 0, 160));
-            g.drawLine(cx - half, waterfallTop, cx - half, waterfallBot);
-            g.drawLine(cx + half, waterfallTop, cx + half, waterfallBot);
+            g.drawLine(bandLeft,  waterfallTop, bandLeft,  waterfallBot);
+            g.drawLine(bandRight, waterfallTop, bandRight, waterfallBot);
         }
 
         // Centre cursor line (full height)
@@ -509,8 +552,8 @@ public class SpectrumWaterfallPanel extends JPanel {
         g.setColor(new Color(255, 230, 0));
         g.drawString(freqLabel, labelX, 14);
 
-        // Bandwidth label – top-right corner of spectrum strip
-        String bwLabel = "BW: " + bandwidthHz + " Hz";
+        // Mode + bandwidth label – top-right corner of spectrum strip
+        String bwLabel = rxMode.getLabel() + "  BW: " + bandwidthHz + " Hz";
         FontMetrics fmBw = g.getFontMetrics(); // same font (MONOSPACED BOLD 10)
         int bwLabelW = fmBw.stringWidth(bwLabel);
         int bwX = w - bwLabelW - 4;
@@ -570,12 +613,28 @@ public class SpectrumWaterfallPanel extends JPanel {
      * field so the audio-capture thread picks them up without a lock.
      */
     private void recomputeFilter() {
-        if (bandwidthHz < 50 || centerFreqHz <= 0) {
+        if (bandwidthHz < 50) {
             filterCoeffs = null;
             return;
         }
-        double Q     = Math.max(0.5, (double) centerFreqHz / bandwidthHz);
-        double omega = 2.0 * Math.PI * centerFreqHz / SAMPLE_RATE;
+
+        // Shift the filter centre so the passband covers the correct side
+        int filterCenterHz;
+        if (rxMode.isUpperSide()) {
+            filterCenterHz = centerFreqHz + bandwidthHz / 2;
+        } else if (rxMode.isLowerSide()) {
+            filterCenterHz = centerFreqHz - bandwidthHz / 2;
+        } else {
+            filterCenterHz = centerFreqHz; // symmetric modes
+        }
+
+        if (filterCenterHz <= 0) {
+            filterCoeffs = null;
+            return;
+        }
+
+        double Q     = Math.max(0.5, (double) filterCenterHz / bandwidthHz);
+        double omega = 2.0 * Math.PI * filterCenterHz / SAMPLE_RATE;
         double sinW  = Math.sin(omega);
         double cosW  = Math.cos(omega);
         double alpha = sinW / (2.0 * Q);
