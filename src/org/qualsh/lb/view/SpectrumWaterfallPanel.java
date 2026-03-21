@@ -96,8 +96,28 @@ public class SpectrumWaterfallPanel extends JPanel {
     private enum DragMode { NONE, CENTER, LOW_EDGE, HIGH_EDGE }
     private DragMode dragMode    = DragMode.NONE;
     private int      dragStartX  = -1;
-    /** The fixed edge (Hz) held constant while the opposite edge is being dragged. */
-    private int      dragFixedEdgeHz = -1;
+
+    // ── Audio bandpass filter ──────────────────────────────────────────────────
+
+    /**
+     * Immutable container for 2nd-order IIR biquad bandpass coefficients.
+     * A new instance is published via a volatile field whenever the selection
+     * changes, ensuring the audio-capture thread always sees a consistent set.
+     */
+    private static final class FilterCoeffs {
+        final double b0, b2, a1, a2; // b1 = 0 for a bandpass biquad
+        FilterCoeffs(double b0, double b2, double a1, double a2) {
+            this.b0 = b0; this.b2 = b2; this.a1 = a1; this.a2 = a2;
+        }
+    }
+
+    /** Non-null when bandpass filtering is active; null means pass-through. */
+    private volatile FilterCoeffs filterCoeffs = null;
+
+    // Filter delay lines – only written from the audio-capture thread; the
+    // occasional benign data race when coefficients are swapped is acceptable
+    // (it causes at most a brief transient on the spectrum display).
+    private double flt_x1, flt_x2, flt_y1, flt_y2;
 
     /** Called with (centerHz, bandwidthHz) whenever the selection changes. */
     private BiConsumer<Integer, Integer> selectionListener;
@@ -120,15 +140,12 @@ public class SpectrumWaterfallPanel extends JPanel {
                 if (Math.abs(e.getX() - cx) <= CENTER_GRAB_PX) {
                     // Centre grab zone: drag moves centre frequency, bandwidth unchanged
                     dragMode = DragMode.CENTER;
-                    dragFixedEdgeHz = -1;
                 } else if (e.getX() < cx) {
-                    // Left of centre: drag adjusts the low edge; high edge stays fixed
+                    // Left of centre: drag expands/contracts bandwidth symmetrically
                     dragMode = DragMode.LOW_EDGE;
-                    dragFixedEdgeHz = centerFreqHz + bandwidthHz / 2;
                 } else {
-                    // Right of centre: drag adjusts the high edge; low edge stays fixed
+                    // Right of centre: drag expands/contracts bandwidth symmetrically
                     dragMode = DragMode.HIGH_EDGE;
-                    dragFixedEdgeHz = centerFreqHz - bandwidthHz / 2;
                 }
                 repaint();
             }
@@ -145,9 +162,9 @@ public class SpectrumWaterfallPanel extends JPanel {
                     bandwidthHz = Math.max(bandwidthHz, 50);
                 }
 
-                dragMode        = DragMode.NONE;
-                dragStartX      = -1;
-                dragFixedEdgeHz = -1;
+                dragMode   = DragMode.NONE;
+                dragStartX = -1;
+                recomputeFilter();
                 updateCursor(e.getX());
                 fireSelection();
                 repaint();
@@ -166,19 +183,13 @@ public class SpectrumWaterfallPanel extends JPanel {
                         // bandwidth unchanged
                         break;
 
-                    case LOW_EDGE: {
-                        int hi = dragFixedEdgeHz;
-                        int lo = Math.max(0, Math.min(freq, hi - 10));
-                        centerFreqHz = (lo + hi) / 2;
-                        bandwidthHz  = hi - lo;
-                        break;
-                    }
-
+                    case LOW_EDGE:
                     case HIGH_EDGE: {
-                        int lo = dragFixedEdgeHz;
-                        int hi = Math.min((int) MAX_FREQ_HZ, Math.max(freq, lo + 10));
-                        centerFreqHz = (lo + hi) / 2;
-                        bandwidthHz  = hi - lo;
+                        // Expand/contract bandwidth symmetrically around the fixed
+                        // centre frequency.  Both edges move together so the centre
+                        // never shifts during a bandwidth adjustment.
+                        int halfBw = Math.abs(freq - centerFreqHz);
+                        bandwidthHz = Math.max(10, halfBw * 2);
                         break;
                     }
 
@@ -214,12 +225,26 @@ public class SpectrumWaterfallPanel extends JPanel {
      */
     public void feedPcm(byte[] pcm) {
         int nSamples = pcm.length / 2;
+        FilterCoeffs f = filterCoeffs; // read volatile once per buffer
         for (int i = 0; i < nSamples; i++) {
             // Little-endian 16-bit → float in [−1, +1)
             int lo = pcm[i * 2]     & 0xFF;
             int hi = pcm[i * 2 + 1] & 0xFF;
             short s = (short) ((hi << 8) | lo);
-            ringBuf[ringPos] = s / 32768f;
+            float raw = s / 32768f;
+
+            if (f != null) {
+                // Direct-Form II biquad bandpass (b1 = 0, so that term is omitted)
+                double x0 = raw;
+                double y0 = f.b0 * x0 + f.b2 * flt_x2
+                          - f.a1 * flt_y1 - f.a2 * flt_y2;
+                flt_x2 = flt_x1; flt_x1 = x0;
+                flt_y2 = flt_y1; flt_y1 = y0;
+                ringBuf[ringPos] = (float) y0;
+            } else {
+                ringBuf[ringPos] = raw;
+            }
+
             ringPos = (ringPos + 1) % FFT_SIZE;
             if (++newSamplesCount >= HOP_SIZE) {
                 newSamplesCount = 0;
@@ -232,6 +257,7 @@ public class SpectrumWaterfallPanel extends JPanel {
     public void setSelection(int centerHz, int bwHz) {
         this.centerFreqHz = Math.max(0, Math.min((int) MAX_FREQ_HZ, centerHz));
         this.bandwidthHz  = Math.max(0, bwHz);
+        recomputeFilter();
         repaint();
     }
 
@@ -482,6 +508,16 @@ public class SpectrumWaterfallPanel extends JPanel {
         g.fillRect(labelX - 1, 4, fm.stringWidth(freqLabel) + 2, 13);
         g.setColor(new Color(255, 230, 0));
         g.drawString(freqLabel, labelX, 14);
+
+        // Bandwidth label – top-right corner of spectrum strip
+        String bwLabel = "BW: " + bandwidthHz + " Hz";
+        FontMetrics fmBw = g.getFontMetrics(); // same font (MONOSPACED BOLD 10)
+        int bwLabelW = fmBw.stringWidth(bwLabel);
+        int bwX = w - bwLabelW - 4;
+        g.setColor(new Color(0, 0, 0, 180));
+        g.fillRect(bwX - 2, 4, bwLabelW + 4, 13);
+        g.setColor(new Color(180, 230, 255));
+        g.drawString(bwLabel, bwX, 14);
     }
 
     // ── Cursor management ─────────────────────────────────────────────────────
@@ -516,6 +552,42 @@ public class SpectrumWaterfallPanel extends JPanel {
     private void fireSelection() {
         BiConsumer<Integer, Integer> l = selectionListener;
         if (l != null) l.accept(centerFreqHz, bandwidthHz);
+    }
+
+    // ── Bandpass filter ───────────────────────────────────────────────────────
+
+    /**
+     * Recompute 2nd-order Butterworth bandpass biquad coefficients from the
+     * current {@link #centerFreqHz} / {@link #bandwidthHz} selection.
+     *
+     * <p>Uses the Audio-EQ-Cookbook bandpass formula (constant 0 dB peak gain):
+     * <pre>
+     *   ω₀ = 2π·fc/Fs,  α = sin(ω₀)/(2Q),  Q = fc/bw
+     *   b0 =  α,  b1 = 0,  b2 = −α
+     *   a0 = 1+α, a1 = −2cos(ω₀), a2 = 1−α
+     * </pre>
+     * Called from the EDT; the new coefficients are published via a volatile
+     * field so the audio-capture thread picks them up without a lock.
+     */
+    private void recomputeFilter() {
+        if (bandwidthHz < 50 || centerFreqHz <= 0) {
+            filterCoeffs = null;
+            return;
+        }
+        double Q     = Math.max(0.5, (double) centerFreqHz / bandwidthHz);
+        double omega = 2.0 * Math.PI * centerFreqHz / SAMPLE_RATE;
+        double sinW  = Math.sin(omega);
+        double cosW  = Math.cos(omega);
+        double alpha = sinW / (2.0 * Q);
+        double a0inv = 1.0 / (1.0 + alpha);
+        filterCoeffs = new FilterCoeffs(
+                alpha * a0inv,          // b0
+               -alpha * a0inv,          // b2  (b1 = 0)
+               -2.0 * cosW * a0inv,     // a1
+                (1.0 - alpha) * a0inv   // a2
+        );
+        // Reset delay lines to avoid a transient on the spectrum display
+        flt_x1 = flt_x2 = flt_y1 = flt_y2 = 0.0;
     }
 
     // ── Waterfall rebuild ─────────────────────────────────────────────────────

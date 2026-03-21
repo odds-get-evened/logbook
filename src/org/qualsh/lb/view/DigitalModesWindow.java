@@ -219,8 +219,10 @@ public class DigitalModesWindow extends JFrame {
         );
 
         // Selection info bar
-        lblSelectionInfo = new JLabel("Selected: " + waterfallPanel.getCenterFreqHz()
-                + " Hz  ±  " + (waterfallPanel.getBandwidthHz() / 2) + " Hz");
+        int initCtr = waterfallPanel.getCenterFreqHz();
+        int initBw  = waterfallPanel.getBandwidthHz();
+        lblSelectionInfo = new JLabel("BW: " + initBw + " Hz  |  Centre: " + initCtr
+                + " Hz  (" + (initCtr - initBw / 2) + "\u2013" + (initCtr + initBw / 2) + " Hz)");
         lblSelectionInfo.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
 
         JButton btnTune = new JButton("Tune to Selected");
@@ -233,8 +235,8 @@ public class DigitalModesWindow extends JFrame {
         infoBar.add(btnTune);
 
         JPanel section = new JPanel(new BorderLayout(0, 2));
+        section.add(infoBar,        BorderLayout.NORTH);
         section.add(waterfallPanel, BorderLayout.CENTER);
-        section.add(infoBar,        BorderLayout.SOUTH);
         return section;
     }
 
@@ -850,7 +852,8 @@ public class DigitalModesWindow extends JFrame {
     }
 
     private void updateSelectionLabel(int centerHz, int bwHz) {
-        lblSelectionInfo.setText("Selected: " + centerHz + " Hz  ±  " + (bwHz / 2) + " Hz");
+        lblSelectionInfo.setText("BW: " + bwHz + " Hz  |  Centre: " + centerHz
+                + " Hz  (" + (centerHz - bwHz / 2) + "\u2013" + (centerHz + bwHz / 2) + " Hz)");
     }
 
     private void updateRigStatus(boolean connected) {
