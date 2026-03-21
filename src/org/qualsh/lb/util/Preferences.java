@@ -37,6 +37,8 @@ public class Preferences {
 	public static final String PREF_DIGITAL_PLAYBACK_DEVICE   = "digital_playback_device";   // javax.sound mixer name
 	public static final String PREF_DIGITAL_WSJTX_UDP_PORT    = "digital_wsjtx_udp_port";    // default 2237
 	public static final String PREF_DIGITAL_JS8CALL_UDP_PORT  = "digital_js8call_udp_port";  // default 2242
+	public static final String PREF_DIGITAL_FLDIGI_HOST       = "digital_fldigi_host";       // default localhost
+	public static final String PREF_DIGITAL_FLDIGI_PORT       = "digital_fldigi_port";       // default 7362
 
 	public Preferences() {
 		

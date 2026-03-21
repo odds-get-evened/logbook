@@ -11,8 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * WsjtxUdpListener – receive WSJT-X UDP broadcast messages and fire callbacks
- * so the application can auto-log completed QSOs.
+ * WSJT-X / JS8Call UDP backend — implements {@link DigitalModeBackend} by
+ * listening for WSJT-X binary UDP broadcasts.
  *
  * <h2>Background</h2>
  * <p>WSJT-X (and by extension FT8, FT4, JS8Call) broadcasts real-time status
@@ -41,7 +41,7 @@ import java.util.function.Consumer;
  * Configure the external app to send UDP to 127.0.0.1:2237 (default).
  * JS8Call uses port 2242 by default; override via {@link #DEFAULT_PORT}.
  */
-public class WsjtxUdpListener {
+public class WsjtxUdpListener implements DigitalModeBackend {
 
     // WSJT-X magic number and default port
     private static final int MAGIC  = 0xADBCCBDA;
@@ -50,8 +50,8 @@ public class WsjtxUdpListener {
     public  static final int JS8CALL_PORT = 2242;
 
     // Message type constants
-    private static final int MSG_HEARTBEAT = 0;
-    private static final int MSG_STATUS    = 1;
+    private static final int MSG_HEARTBEAT  = 0;
+    private static final int MSG_STATUS     = 1;
     private static final int MSG_QSO_LOGGED = 5;
 
     // ── Singleton ─────────────────────────────────────────────────────────────
@@ -70,9 +70,18 @@ public class WsjtxUdpListener {
     private DatagramSocket socket;
     private Thread listenerThread;
     private final AtomicBoolean running = new AtomicBoolean(false);
+    private volatile int activePort = DEFAULT_PORT;
 
-    private final List<Consumer<StatusMessage>>    statusListeners    = new ArrayList<>();
-    private final List<Consumer<QsoLoggedMessage>> qsoLoggedListeners = new ArrayList<>();
+    private final List<Consumer<StatusEvent>>   statusListeners      = new ArrayList<>();
+    private final List<Consumer<AutoLogEvent>>  qsoLoggedListeners   = new ArrayList<>();
+    private final List<Consumer<DecodedLine>>   decodedLineListeners = new ArrayList<>();
+
+    // ── DigitalModeBackend ────────────────────────────────────────────────────
+
+    @Override
+    public String name() {
+        return activePort == JS8CALL_PORT ? "JS8Call" : "WSJT-X";
+    }
 
     // ── Start / stop ──────────────────────────────────────────────────────────
 
@@ -82,11 +91,13 @@ public class WsjtxUdpListener {
      * @param port UDP port (use {@link #DEFAULT_PORT} for WSJT-X, {@link #JS8CALL_PORT} for JS8Call)
      * @return {@code true} if the socket was bound successfully
      */
+    @Override
     public synchronized boolean start(int port) {
         stop();
         try {
             socket = new DatagramSocket(port);
             socket.setSoTimeout(500); // allow periodic shutdown check
+            activePort = port;
             running.set(true);
 
             listenerThread = new Thread(() -> {
@@ -116,6 +127,7 @@ public class WsjtxUdpListener {
     }
 
     /** Stop the listener and close the socket. */
+    @Override
     public synchronized void stop() {
         running.set(false);
         if (socket != null) { socket.close(); socket = null; }
@@ -125,32 +137,39 @@ public class WsjtxUdpListener {
         }
     }
 
+    @Override
     public boolean isRunning() { return running.get(); }
 
     // ── Listener registration ─────────────────────────────────────────────────
 
-    /** Receive live status updates (frequency, mode, transmitting flag). */
-    public void addStatusListener(Consumer<StatusMessage> l) {
+    @Override
+    public void addStatusListener(Consumer<StatusEvent> l) {
         synchronized (statusListeners) { statusListeners.add(l); }
     }
 
-    public void removeStatusListener(Consumer<StatusMessage> l) {
+    @Override
+    public void removeStatusListener(Consumer<StatusEvent> l) {
         synchronized (statusListeners) { statusListeners.remove(l); }
     }
 
-    /**
-     * Receive a callback each time WSJT-X logs a QSO (Type 5 message).
-     *
-     * <p>This is the hook for <b>auto-log creation</b>: when a QSO is logged
-     * in WSJT-X, the application receives the full QSO data and can create
-     * a {@link org.qualsh.lb.log.Log} entry automatically.
-     */
-    public void addQsoLoggedListener(Consumer<QsoLoggedMessage> l) {
+    @Override
+    public void addQsoLoggedListener(Consumer<AutoLogEvent> l) {
         synchronized (qsoLoggedListeners) { qsoLoggedListeners.add(l); }
     }
 
-    public void removeQsoLoggedListener(Consumer<QsoLoggedMessage> l) {
+    @Override
+    public void removeQsoLoggedListener(Consumer<AutoLogEvent> l) {
         synchronized (qsoLoggedListeners) { qsoLoggedListeners.remove(l); }
+    }
+
+    @Override
+    public void addDecodedLineListener(Consumer<DecodedLine> l) {
+        synchronized (decodedLineListeners) { decodedLineListeners.add(l); }
+    }
+
+    @Override
+    public void removeDecodedLineListener(Consumer<DecodedLine> l) {
+        synchronized (decodedLineListeners) { decodedLineListeners.remove(l); }
     }
 
     // ── Packet decoding ───────────────────────────────────────────────────────
@@ -174,22 +193,21 @@ public class WsjtxUdpListener {
 
     private void handleStatus(ByteBuffer buf) {
         try {
-            String id        = readUtf8(buf);
-            long   dialFreqHz = buf.getLong();  // Hz
-            String mode      = readUtf8(buf);
-            String dxCall    = readUtf8(buf);
-            String report    = readUtf8(buf);
-            String txMode    = readUtf8(buf);
+            String id          = readUtf8(buf);
+            long   dialFreqHz  = buf.getLong();  // Hz
+            String mode        = readUtf8(buf);
+            String dxCall      = readUtf8(buf);
+            String report      = readUtf8(buf);
+            String txMode      = readUtf8(buf);
             boolean txEnabled  = buf.get() != 0;
             boolean transmitting = buf.get() != 0;
 
-            StatusMessage msg = new StatusMessage(id, dialFreqHz, mode, dxCall,
-                    report, txMode, txEnabled, transmitting);
+            StatusEvent evt = new StatusEvent(dialFreqHz, mode, transmitting);
 
-            List<Consumer<StatusMessage>> snapshot;
+            List<Consumer<StatusEvent>> snapshot;
             synchronized (statusListeners) { snapshot = new ArrayList<>(statusListeners); }
-            for (Consumer<StatusMessage> l : snapshot) {
-                try { l.accept(msg); } catch (Exception ignored) {}
+            for (Consumer<StatusEvent> l : snapshot) {
+                try { l.accept(evt); } catch (Exception ignored) {}
             }
         } catch (Exception e) {
             System.err.println("WsjtxUdpListener: status decode error – " + e.getMessage());
@@ -219,17 +237,17 @@ public class WsjtxUdpListener {
             String exchangeRcvd = buf.hasRemaining() ? readUtf8(buf) : "";
             String propMode     = buf.hasRemaining() ? readUtf8(buf) : "";
 
-            QsoLoggedMessage msg = new QsoLoggedMessage(
-                    id, julianToLocalDate(dateOnJD), timeOnMs / 1000,
+            AutoLogEvent evt = new AutoLogEvent(
+                    julianToLocalDate(dateOnJD), timeOnMs / 1000,
                     dxCall, dxGrid, dialFreqHz / 1000.0, mode,
                     rstSent, rstRcvd, txPower, comments, name,
-                    myCall, myGrid, propMode
+                    myCall, myGrid, propMode, name()
             );
 
-            List<Consumer<QsoLoggedMessage>> snapshot;
+            List<Consumer<AutoLogEvent>> snapshot;
             synchronized (qsoLoggedListeners) { snapshot = new ArrayList<>(qsoLoggedListeners); }
-            for (Consumer<QsoLoggedMessage> l : snapshot) {
-                try { l.accept(msg); } catch (Exception ignored) {}
+            for (Consumer<AutoLogEvent> l : snapshot) {
+                try { l.accept(evt); } catch (Exception ignored) {}
             }
         } catch (Exception e) {
             System.err.println("WsjtxUdpListener: QSO-logged decode error – " + e.getMessage());
@@ -268,46 +286,4 @@ public class WsjtxUdpListener {
         int year  = (int)(100 * (n - 49) + i + l);
         return java.time.LocalDate.of(year, month, day);
     }
-
-    // ── Data transfer objects ─────────────────────────────────────────────────
-
-    /**
-     * Live status snapshot from WSJT-X (Message Type 1).
-     */
-    public record StatusMessage(
-            String  id,
-            long    dialFreqHz,
-            String  mode,
-            String  dxCall,
-            String  report,
-            String  txMode,
-            boolean txEnabled,
-            boolean transmitting
-    ) {
-        public double dialFreqKhz() { return dialFreqHz / 1000.0; }
-    }
-
-    /**
-     * Completed QSO data from WSJT-X (Message Type 5).
-     *
-     * <p>This is handed directly to the auto-log callback in
-     * {@link org.qualsh.lb.view.DigitalModesWindow}.
-     */
-    public record QsoLoggedMessage(
-            String              instanceId,
-            java.time.LocalDate dateOn,
-            int                 timeOnSecOfDay,
-            String              dxCall,
-            String              dxGrid,
-            double              dialFreqKhz,
-            String              mode,
-            String              rstSent,
-            String              rstRcvd,
-            String              txPower,
-            String              comments,
-            String              name,
-            String              myCall,
-            String              myGrid,
-            String              propMode
-    ) {}
 }

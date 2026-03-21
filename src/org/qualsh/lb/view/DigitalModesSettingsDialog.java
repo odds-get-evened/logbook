@@ -1,6 +1,7 @@
 package org.qualsh.lb.view;
 
 import org.qualsh.lb.digital.AudioRouter;
+import org.qualsh.lb.digital.FldigiXmlRpcBackend;
 import org.qualsh.lb.digital.PttController;
 import org.qualsh.lb.digital.PttController.PttMethod;
 import org.qualsh.lb.digital.WsjtxUdpListener;
@@ -41,6 +42,10 @@ public class DigitalModesSettingsDialog extends JDialog {
     private JSpinner spinnerWsjtxPort;
     private JSpinner spinnerJs8callPort;
 
+    // Fldigi XML-RPC
+    private JTextField txtFldigiHost;
+    private JSpinner   spinnerFldigiPort;
+
     // Status
     private JLabel lblStatus;
 
@@ -64,6 +69,8 @@ public class DigitalModesSettingsDialog extends JDialog {
         centre.add(buildAudioPanel());
         centre.add(Box.createVerticalStrut(6));
         centre.add(buildWsjtxPanel());
+        centre.add(Box.createVerticalStrut(6));
+        centre.add(buildFldigiPanel());
 
         lblStatus = new JLabel(" ");
         lblStatus.setBorder(new EmptyBorder(2, 4, 2, 4));
@@ -193,6 +200,39 @@ public class DigitalModesSettingsDialog extends JDialog {
         return p;
     }
 
+    private JPanel buildFldigiPanel() {
+        JPanel p = new JPanel(new GridBagLayout());
+        p.setBorder(new CompoundBorder(
+                new TitledBorder(new EtchedBorder(), "Fldigi / XML-RPC Integration"),
+                new EmptyBorder(6, 8, 6, 8)));
+        p.setMaximumSize(new Dimension(Integer.MAX_VALUE, 120));
+
+        GridBagConstraints lc = lc();
+        GridBagConstraints fc = fc();
+
+        lc.gridy = fc.gridy = 0;
+        p.add(bold("Host"), lc);
+        txtFldigiHost = new JTextField(FldigiXmlRpcBackend.DEFAULT_HOST, 16);
+        p.add(txtFldigiHost, fc);
+
+        lc.gridy = fc.gridy = 1;
+        p.add(bold("XML-RPC port"), lc);
+        spinnerFldigiPort = new JSpinner(new SpinnerNumberModel(
+                FldigiXmlRpcBackend.DEFAULT_PORT, 1024, 65535, 1));
+        ((JSpinner.DefaultEditor) spinnerFldigiPort.getEditor()).getTextField().setColumns(6);
+        p.add(spinnerFldigiPort, fc);
+
+        JLabel note = new JLabel(
+                "<html><i>In Fldigi: Configure → Misc → XML-RPC. Restart required after changing.</i></html>");
+        note.setFont(note.getFont().deriveFont(10f));
+        GridBagConstraints nc = fc();
+        nc.gridy = 2; nc.gridx = 0; nc.gridwidth = 2;
+        nc.insets = new Insets(2, 0, 0, 0);
+        p.add(note, nc);
+
+        return p;
+    }
+
     // ── Actions ───────────────────────────────────────────────────────────────
 
     private void onSave() {
@@ -216,6 +256,11 @@ public class DigitalModesSettingsDialog extends JDialog {
                 spinnerWsjtxPort.getValue().toString());
         Preferences.save(Preferences.PREF_DIGITAL_JS8CALL_UDP_PORT,
                 spinnerJs8callPort.getValue().toString());
+
+        Preferences.save(Preferences.PREF_DIGITAL_FLDIGI_HOST,
+                txtFldigiHost.getText().trim());
+        Preferences.save(Preferences.PREF_DIGITAL_FLDIGI_PORT,
+                spinnerFldigiPort.getValue().toString());
 
         // Apply PTT port immediately
         PttController.getInstance().closePttPort();
@@ -247,6 +292,15 @@ public class DigitalModesSettingsDialog extends JDialog {
         String js8Port = Preferences.getOne(Preferences.PREF_DIGITAL_JS8CALL_UDP_PORT);
         if (js8Port != null && !js8Port.isEmpty()) {
             try { spinnerJs8callPort.setValue(Integer.parseInt(js8Port)); }
+            catch (NumberFormatException ignored) {}
+        }
+
+        String fldigiHost = Preferences.getOne(Preferences.PREF_DIGITAL_FLDIGI_HOST);
+        if (fldigiHost != null && !fldigiHost.isEmpty()) txtFldigiHost.setText(fldigiHost);
+
+        String fldigiPort = Preferences.getOne(Preferences.PREF_DIGITAL_FLDIGI_PORT);
+        if (fldigiPort != null && !fldigiPort.isEmpty()) {
+            try { spinnerFldigiPort.setValue(Integer.parseInt(fldigiPort)); }
             catch (NumberFormatException ignored) {}
         }
 
