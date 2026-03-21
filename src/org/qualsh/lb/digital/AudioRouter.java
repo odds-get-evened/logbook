@@ -257,13 +257,17 @@ public class AudioRouter {
     private TargetDataLine openTargetLine(String deviceName) throws LineUnavailableException {
         DataLine.Info info = new DataLine.Info(TargetDataLine.class, FORMAT, BUFFER_BYTES * 2);
         if (deviceName == null || deviceName.isEmpty()) {
-            return (TargetDataLine) AudioSystem.getLine(info);
+            TargetDataLine line = (TargetDataLine) AudioSystem.getLine(info);
+            line.open(FORMAT, BUFFER_BYTES * 2);
+            return line;
         }
         for (Mixer.Info mi : AudioSystem.getMixerInfo()) {
             if (!mi.getName().equals(deviceName)) continue;
             Mixer m = AudioSystem.getMixer(mi);
             if (m.isLineSupported(info)) {
-                return (TargetDataLine) m.getLine(info);
+                TargetDataLine line = (TargetDataLine) m.getLine(info);
+                line.open(FORMAT, BUFFER_BYTES * 2);
+                return line;
             }
         }
         throw new LineUnavailableException("Capture device not found: " + deviceName);
