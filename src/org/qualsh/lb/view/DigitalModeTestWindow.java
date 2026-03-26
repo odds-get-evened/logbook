@@ -1,7 +1,7 @@
 package org.qualsh.lb.view;
 
 import org.qualsh.lb.digital.AudioRouter;
-import org.qualsh.lb.digital.DigitalMode;
+import org.qualsh.lb.digital.Bpsk31Decoder;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -18,72 +18,77 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * DigitalModeTestWindow – prototype workbench for developing and testing
- * digital mode encoding/decoding from a live or file audio source.
+ * Digital mode decode window – BPSK31 (PSK31).
  *
- * <h2>Purpose</h2>
- * <p>This window is the foundation for a full-fledged multi-mode digital
- * mode operator.  Right now it provides:
+ * <h2>Audio sources</h2>
  * <ul>
- *   <li>Audio source selection: live capture device or WAV file</li>
- *   <li>Mode selection (FT8, FT4, PSK31, RTTY, …)</li>
- *   <li>Real-time spectrum / waterfall display</li>
- *   <li>RX decoded-output pane (to be wired to a real decoder)</li>
- *   <li>TX compose pane (to be wired to a real encoder)</li>
+ *   <li><b>Live capture</b> – select a soundcard input (e.g., the USB audio
+ *       CODEC from your radio interface) and click "Start Capture".</li>
+ *   <li><b>Audio file</b> – click "Load Audio File…" to load a WAV/AU/AIFF
+ *       recording of a PSK31 transmission.</li>
  * </ul>
  *
- * <h2>Layout</h2>
- * <pre>
- * ┌──────────────────────────────────────────────────────────────────┐
- * │  [Mode ▼]  [Audio In ▼]  [▶ Start Capture]  [Load File…]        │ ← toolbar
- * ├─────────────────────────────┬────────────────────────────────────┤
- * │  Spectrum / Waterfall       │  RX — Decoded Output               │
- * │  (live FFT from audio in)   │  (scrolling text; hook decoder in) │
- * │                             │                                    │
- * ├─────────────────────────────┴────────────────────────────────────┤
- * │  TX — Compose                                  [Encode & Send]   │
- * ├──────────────────────────────────────────────────────────────────┤
- * │  Status bar                                                      │
- * └──────────────────────────────────────────────────────────────────┘
- * </pre>
+ * <h2>Tuning</h2>
+ * <p>Click anywhere on the waterfall to set the carrier frequency, or type a
+ * value directly into the "Carrier Hz" spinner.  PSK31 signals are typically
+ * found between 500 Hz and 2500 Hz in the audio passband.
+ *
+ * <h2>Decoder</h2>
+ * <p>The built-in {@link Bpsk31Decoder} performs:
+ * <ol>
+ *   <li>IQ mixing to baseband at the selected carrier frequency.</li>
+ *   <li>Single-pole IIR low-pass filtering (~47 Hz cutoff).</li>
+ *   <li>Integrate-and-dump over one 31.25-baud symbol (1536 samples at 48 kHz).</li>
+ *   <li>Differential BPSK bit decision.</li>
+ *   <li>PSK31 Varicode decoding to ASCII text.</li>
+ * </ol>
  */
 public class DigitalModeTestWindow extends JFrame {
 
-    private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 2L;
+
+    /** Default PSK31 carrier frequency (Hz). */
+    private static final int DEFAULT_CARRIER_HZ = 1000;
+    /** Waterfall passband width for PSK31 (Hz). */
+    private static final int BPSK31_BW_HZ = 100;
 
     // ── UI components ──────────────────────────────────────────────────────────
 
-    private final JComboBox<DigitalMode> modeCombo;
-    private final JComboBox<String>      audioInCombo;
-    private final JButton                startStopBtn;
-    private final JButton                loadFileBtn;
+    private final JComboBox<String> audioInCombo;
+    private final JButton           startStopBtn;
+    private final JButton           loadFileBtn;
+    private final JSpinner          carrierSpinner;
 
     private final SpectrumWaterfallPanel waterfallPanel;
 
     private final JTextArea rxOutput;
-    private final JTextArea txCompose;
-    private final JButton   encodeSendBtn;
-
-    private final JLabel statusLabel;
+    private final JLabel    statusLabel;
 
     // ── State ─────────────────────────────────────────────────────────────────
 
-    private boolean capturing = false;
+    private boolean capturing    = false;
     private Thread  filePlayThread = null;
+
     /** Stored reference so we can un-register the same instance from AudioRouter. */
     private final java.util.function.Consumer<byte[]> pcmListener = this::feedPcm;
+
+    // ── Decoder ───────────────────────────────────────────────────────────────
+
+    private final Bpsk31Decoder decoder;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
     public DigitalModeTestWindow(Frame owner) {
-        super("Digital Mode Test");
+        super("BPSK31 Decoder");
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setPreferredSize(new Dimension(1000, 700));
-        setMinimumSize(new Dimension(800, 550));
+        setPreferredSize(new Dimension(1000, 680));
+        setMinimumSize(new Dimension(800, 520));
 
-        // ── Mode + audio toolbar ───────────────────────────────────────────────
+        // ── Decoder ────────────────────────────────────────────────────────────
+        decoder = new Bpsk31Decoder(this::appendRx);
 
-        modeCombo   = new JComboBox<>(DigitalMode.values());
+        // ── Toolbar ────────────────────────────────────────────────────────────
+
         audioInCombo = new JComboBox<>(AudioRouter.availableCaptureDevices());
         if (audioInCombo.getItemCount() == 0) audioInCombo.addItem("(no devices found)");
         audioInCombo.insertItemAt("System Default", 0);
@@ -92,38 +97,72 @@ public class DigitalModeTestWindow extends JFrame {
         startStopBtn = new JButton("▶  Start Capture");
         loadFileBtn  = new JButton("Load Audio File…");
 
+        SpinnerNumberModel carrierModel = new SpinnerNumberModel(
+                DEFAULT_CARRIER_HZ, 100, 3500, 10);
+        carrierSpinner = new JSpinner(carrierModel);
+        carrierSpinner.setPreferredSize(new Dimension(80, carrierSpinner.getPreferredSize().height));
+        carrierSpinner.setToolTipText(
+                "PSK31 carrier frequency in Hz (click waterfall to tune)");
+
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-        toolbar.add(new JLabel("Mode:"));
-        toolbar.add(modeCombo);
+        toolbar.add(new JLabel("Mode: BPSK31"));
+        toolbar.add(new JSeparator(SwingConstants.VERTICAL));
         toolbar.add(new JLabel("Audio In:"));
         toolbar.add(audioInCombo);
         toolbar.add(startStopBtn);
         toolbar.add(new JSeparator(SwingConstants.VERTICAL));
         toolbar.add(loadFileBtn);
+        toolbar.add(new JSeparator(SwingConstants.VERTICAL));
+        toolbar.add(new JLabel("Carrier Hz:"));
+        toolbar.add(carrierSpinner);
 
         // ── Waterfall ──────────────────────────────────────────────────────────
 
         waterfallPanel = new SpectrumWaterfallPanel();
-        waterfallPanel.setPreferredSize(new Dimension(500, 300));
-        waterfallPanel.setMinimumSize(new Dimension(200, 150));
+        waterfallPanel.setPreferredSize(new Dimension(500, 280));
+        waterfallPanel.setMinimumSize(new Dimension(200, 140));
+
+        // Set symmetric passband centred at the carrier (appropriate for BPSK31)
+        waterfallPanel.setRxMode(org.qualsh.lb.digital.RxMode.CW);
+        waterfallPanel.setSelection(DEFAULT_CARRIER_HZ, BPSK31_BW_HZ);
+
+        // Forward bandpass-filtered audio to the decoder
+        waterfallPanel.setFilteredOutputListener(decoder::feed);
+
+        // Keep decoder tuned to whatever the user selects on the waterfall
+        waterfallPanel.setSelectionListener((centerHz, bwHz) -> {
+            decoder.setCarrierHz(centerHz);
+            SwingUtilities.invokeLater(() ->
+                    carrierSpinner.setValue(centerHz));
+        });
+
         JPanel waterfallWrapper = new JPanel(new BorderLayout());
-        waterfallWrapper.setBorder(new TitledBorder("Spectrum / Waterfall"));
+        waterfallWrapper.setBorder(new TitledBorder("Spectrum / Waterfall — click to tune"));
         waterfallWrapper.add(waterfallPanel, BorderLayout.CENTER);
 
         // ── RX pane ────────────────────────────────────────────────────────────
 
         rxOutput = new JTextArea();
         rxOutput.setEditable(false);
-        rxOutput.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        rxOutput.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
         rxOutput.setLineWrap(true);
         rxOutput.setWrapStyleWord(false);
-        rxOutput.setText("— RX decoder not yet connected —\n" +
-                "Wire your decoder's output to appendRx() on this panel.\n");
+        rxOutput.setText("");
         JScrollPane rxScroll = new JScrollPane(rxOutput);
-        rxScroll.setPreferredSize(new Dimension(400, 300));
+        rxScroll.setPreferredSize(new Dimension(420, 280));
+
+        JPanel clearRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 2));
+        JButton clearBtn = new JButton("Clear");
+        clearBtn.addActionListener(e -> {
+            rxOutput.setText("");
+            decoder.reset();
+        });
+        clearRow.add(clearBtn);
+
         JPanel rxWrapper = new JPanel(new BorderLayout());
-        rxWrapper.setBorder(new TitledBorder("RX — Decoded Output"));
-        rxWrapper.add(rxScroll, BorderLayout.CENTER);
+        rxWrapper.setBorder(new TitledBorder("RX — Decoded BPSK31 Text"));
+        rxWrapper.add(rxScroll,  BorderLayout.CENTER);
+        rxWrapper.add(clearRow, BorderLayout.SOUTH);
 
         // ── Centre split: waterfall | RX ──────────────────────────────────────
 
@@ -132,40 +171,17 @@ public class DigitalModeTestWindow extends JFrame {
         centreSplit.setResizeWeight(0.55);
         centreSplit.setBorder(new EmptyBorder(0, 0, 0, 0));
 
-        // ── TX pane ────────────────────────────────────────────────────────────
-
-        txCompose = new JTextArea(3, 40);
-        txCompose.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        txCompose.setLineWrap(true);
-        txCompose.setWrapStyleWord(true);
-        txCompose.setToolTipText("Type your message here.  Encoding is not yet implemented.");
-        JScrollPane txScroll = new JScrollPane(txCompose);
-
-        encodeSendBtn = new JButton("Encode & Send");
-        encodeSendBtn.setEnabled(false); // not yet implemented
-        encodeSendBtn.setToolTipText("TX encoding not yet implemented");
-
-        JPanel txBottom = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 4));
-        txBottom.add(new JLabel("(TX encoder not yet implemented)"));
-        txBottom.add(encodeSendBtn);
-
-        JPanel txWrapper = new JPanel(new BorderLayout(4, 4));
-        txWrapper.setBorder(new TitledBorder("TX — Compose"));
-        txWrapper.add(txScroll, BorderLayout.CENTER);
-        txWrapper.add(txBottom, BorderLayout.SOUTH);
-
         // ── Status bar ─────────────────────────────────────────────────────────
 
-        statusLabel = new JLabel("Ready");
+        statusLabel = new JLabel("Ready — load an audio file or start live capture");
         statusLabel.setBorder(new EmptyBorder(2, 6, 2, 6));
 
         // ── Root layout ────────────────────────────────────────────────────────
 
         JPanel root = new JPanel(new BorderLayout(4, 4));
         root.setBorder(new EmptyBorder(4, 4, 4, 4));
-        root.add(toolbar,    BorderLayout.NORTH);
+        root.add(toolbar,     BorderLayout.NORTH);
         root.add(centreSplit, BorderLayout.CENTER);
-        root.add(txWrapper,  BorderLayout.SOUTH);
 
         JPanel statusBar = new JPanel(new BorderLayout());
         statusBar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0,
@@ -180,6 +196,12 @@ public class DigitalModeTestWindow extends JFrame {
 
         startStopBtn.addActionListener(e -> toggleCapture());
         loadFileBtn.addActionListener(e -> chooseAndPlayFile());
+
+        carrierSpinner.addChangeListener(e -> {
+            int hz = ((Number) carrierSpinner.getValue()).intValue();
+            decoder.setCarrierHz(hz);
+            waterfallPanel.setSelection(hz, BPSK31_BW_HZ);
+        });
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) { shutdown(); }
@@ -216,10 +238,13 @@ public class DigitalModeTestWindow extends JFrame {
             return;
         }
 
+        decoder.reset();
         capturing = true;
         startStopBtn.setText("■  Stop Capture");
         audioInCombo.setEnabled(false);
-        setStatus("Capturing from: " + (deviceName != null ? deviceName : "System Default"));
+        loadFileBtn.setEnabled(false);
+        setStatus("Capturing: " + (deviceName != null ? deviceName : "System Default")
+                + "  |  Carrier: " + decoder.getCarrierHz() + " Hz");
     }
 
     private void stopCapture() {
@@ -230,6 +255,7 @@ public class DigitalModeTestWindow extends JFrame {
         capturing = false;
         startStopBtn.setText("▶  Start Capture");
         audioInCombo.setEnabled(true);
+        loadFileBtn.setEnabled(true);
         setStatus("Capture stopped");
     }
 
@@ -237,13 +263,14 @@ public class DigitalModeTestWindow extends JFrame {
 
     private void chooseAndPlayFile() {
         JFileChooser fc = new JFileChooser();
-        fc.setDialogTitle("Load Audio File");
+        fc.setDialogTitle("Load PSK31 Audio File");
         fc.setFileFilter(new FileNameExtensionFilter(
                 "Audio files (*.wav, *.au, *.aiff)", "wav", "au", "aiff"));
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
 
         File f = fc.getSelectedFile();
         stopFilePlay();
+        decoder.reset();
 
         filePlayThread = new Thread(() -> playFile(f), "DigitalModeTest-fileplay");
         filePlayThread.setDaemon(true);
@@ -253,7 +280,9 @@ public class DigitalModeTestWindow extends JFrame {
     private void playFile(File f) {
         SwingUtilities.invokeLater(() -> {
             loadFileBtn.setEnabled(false);
-            setStatus("Playing file: " + f.getName());
+            startStopBtn.setEnabled(false);
+            setStatus("Decoding file: " + f.getName()
+                    + "  |  Carrier: " + decoder.getCarrierHz() + " Hz");
         });
 
         try (AudioInputStream raw = AudioSystem.getAudioInputStream(f)) {
@@ -262,18 +291,21 @@ public class DigitalModeTestWindow extends JFrame {
 
             AudioInputStream converted = AudioSystem.isConversionSupported(tgtFmt, srcFmt)
                     ? AudioSystem.getAudioInputStream(tgtFmt, raw)
-                    : raw; // best-effort if conversion not available
+                    : raw;
 
-            byte[] buf = new byte[2048];
+            byte[] buf = new byte[4096];
             int read;
-            while ((read = converted.read(buf)) > 0 && !Thread.currentThread().isInterrupted()) {
+            while ((read = converted.read(buf)) > 0
+                    && !Thread.currentThread().isInterrupted()) {
                 byte[] chunk = new byte[read];
                 System.arraycopy(buf, 0, chunk, 0, read);
                 feedPcm(chunk);
-                // throttle to approximate real-time playback
+                // Throttle to approximate real-time so the waterfall scrolls visibly
                 long sleepMs = (long) (chunk.length * 1000.0
                         / (tgtFmt.getSampleRate() * tgtFmt.getFrameSize()));
-                if (sleepMs > 0) Thread.sleep(sleepMs);
+                if (sleepMs > 0) {
+                    Thread.sleep(sleepMs);
+                }
             }
         } catch (UnsupportedAudioFileException e) {
             SwingUtilities.invokeLater(() ->
@@ -281,11 +313,12 @@ public class DigitalModeTestWindow extends JFrame {
                             "Unsupported audio format:\n" + e.getMessage(),
                             "File Error", JOptionPane.ERROR_MESSAGE));
         } catch (IOException | InterruptedException e) {
-            // interrupted = stopped intentionally
+            // Interrupted = user stopped playback or window closed – expected
         } finally {
             SwingUtilities.invokeLater(() -> {
                 loadFileBtn.setEnabled(true);
-                setStatus("File playback finished");
+                startStopBtn.setEnabled(true);
+                setStatus("File decode finished");
             });
         }
     }
@@ -293,6 +326,7 @@ public class DigitalModeTestWindow extends JFrame {
     private void stopFilePlay() {
         if (filePlayThread != null && filePlayThread.isAlive()) {
             filePlayThread.interrupt();
+            try { filePlayThread.join(500); } catch (InterruptedException ignored) {}
             filePlayThread = null;
         }
     }
@@ -300,31 +334,22 @@ public class DigitalModeTestWindow extends JFrame {
     // ── PCM pipeline ──────────────────────────────────────────────────────────
 
     /**
-     * Entry point for raw PCM audio (48 kHz / 16-bit / mono).
-     * Currently feeds the waterfall display.
-     * Wire additional consumers here as decoders are developed.
-     *
-     * @param pcm raw PCM bytes in {@link AudioRouter#FORMAT}
+     * Entry point for all raw PCM audio (48 kHz / 16-bit / mono).
+     * Feeds the waterfall display; the waterfall then forwards bandpass-filtered
+     * audio to the decoder via its {@code filteredOutputListener}.
      */
     private void feedPcm(byte[] pcm) {
-        // 1. Feed the spectrum / waterfall
         waterfallPanel.feedPcm(pcm);
-
-        // 2. TODO: feed decoder(s) – e.g. FT8, PSK31, RTTY, …
-        //    decoderChain.feed(pcm);
     }
 
-    // ── Public API for external decoder wiring ────────────────────────────────
+    // ── Decoded text output ───────────────────────────────────────────────────
 
     /**
-     * Append a decoded line to the RX output pane.
-     * Safe to call from any thread.
-     *
-     * @param line decoded text to display
+     * Append decoded text to the RX pane.  Safe to call from any thread.
      */
-    public void appendRx(String line) {
+    public void appendRx(String text) {
         SwingUtilities.invokeLater(() -> {
-            rxOutput.append(line + "\n");
+            rxOutput.append(text);
             rxOutput.setCaretPosition(rxOutput.getDocument().getLength());
         });
     }
