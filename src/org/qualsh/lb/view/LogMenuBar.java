@@ -37,8 +37,6 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 	protected PreferencesDialog prefDialog;
 	protected AboutDialog aboutDialog;
 	private LogsModel logsModel;
-	private DigitalModeTestWindow digitalModeTestWindow;
-	
 	public AboutDialog getAboutDialog() {
 		return aboutDialog;
 	}
@@ -107,23 +105,6 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 			}
 		});
 		menuTools.add(menuItemDxSettings);
-
-		menuTools.addSeparator();
-
-		JMenuItem menuItemDigitalModes = new JMenuItem("Digital Mode Test\u2026");
-		menuItemDigitalModes.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_D,
-				Toolkit.getDefaultToolkit().getMenuShortcutKeyMask()));
-		menuItemDigitalModes.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				if (digitalModeTestWindow == null) {
-					digitalModeTestWindow = new DigitalModeTestWindow(
-							(JFrame) LogMenuBar.this.getMainFrame());
-				}
-				digitalModeTestWindow.setVisible(true);
-				digitalModeTestWindow.toFront();
-			}
-		});
-		menuTools.add(menuItemDigitalModes);
 
 		this.setMenuHelp(new JMenu("Help"));
 		add(this.getMenuHelp());
