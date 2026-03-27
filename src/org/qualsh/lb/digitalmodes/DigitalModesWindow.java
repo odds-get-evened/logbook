@@ -139,9 +139,11 @@ public class DigitalModesWindow extends JDialog {
 
         fftPanel = new FFTPanel();
         fftPanel.setBuffer(sharedBuffer);
+        fftPanel.setPlaybackController(playbackController);
 
         waterfallPanel = new WaterfallPanel();
         waterfallPanel.setBuffer(sharedBuffer);
+        waterfallPanel.setPlaybackController(playbackController);
 
         frequencySelector  = new FrequencySelector();
         audioControlPanel  = new AudioControlPanel();
