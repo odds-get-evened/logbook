@@ -3,17 +3,16 @@ package org.qualsh.lb.digitalmodes.mode;
 import org.qualsh.lb.digital.DigitalMode;
 
 /**
- * Provides default signal parameters for a given {@link DigitalMode}.
+ * Looks up the recommended signal bandwidth for a given digital mode.
  *
- * <p>Call {@link #getProfile(DigitalMode)} to obtain a {@code ModeProfile}
- * containing the recommended settings for that mode. Currently this exposes
- * the default occupied bandwidth, which {@code FrequencySelector} uses to
- * initialise its bandwidth markers whenever the operator switches mode.
+ * <p>Each digital mode occupies a known slice of the radio spectrum — for example FT8
+ * occupies about 50 Hz while RTTY uses 250 Hz. This class stores those default widths
+ * so the spectrum display can automatically set its bandwidth markers whenever you switch
+ * modes. Call {@link #getProfile(DigitalMode)} to get the profile for any mode, then use
+ * {@link #getDefaultBandwidthHz()} to read the recommended bandwidth.
  *
- * <p>When a {@code DigitalMode} already carries a non-zero {@code bandwidthHz}
- * value that value is used directly. A small set of well-known modes are
- * given explicit defaults so that newly created or imported modes still produce
- * sensible initial selections even before the operator has configured them.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class ModeProfile {
 
@@ -26,23 +25,16 @@ public class ModeProfile {
     }
 
     /**
-     * Returns a {@code ModeProfile} containing the recommended default
-     * parameters for the supplied {@link DigitalMode}.
+     * Returns the signal profile for the given digital mode, including its recommended
+     * spectrum bandwidth.
      *
-     * <p>The bandwidth is determined in the following order:
-     * <ol>
-     *   <li>If the mode's own {@link DigitalMode#getBandwidthHz()} is greater
-     *       than zero that value is used.</li>
-     *   <li>If the mode's abbreviation matches a built-in preset (FT8, PSK31,
-     *       RTTY, JS8, Olivia, WSPR, JT65, etc.) the preset bandwidth is
-     *       used.</li>
-     *   <li>Otherwise {@value #FALLBACK_BANDWIDTH_HZ} Hz is used as a safe
-     *       general-purpose default.</li>
-     * </ol>
+     * <p>If the mode already has a bandwidth configured, that value is used. Otherwise a
+     * built-in preset is applied for common modes such as FT8, WSPR, PSK31, RTTY, Olivia,
+     * and others. Unknown modes fall back to a sensible {@value #FALLBACK_BANDWIDTH_HZ} Hz
+     * default.
      *
-     * @param mode the digital mode whose profile is requested; must not be
-     *             {@code null}
-     * @return a new {@code ModeProfile} for the given mode; never {@code null}
+     * @param mode the digital mode whose profile is requested; must not be {@code null}
+     * @return the profile for the given mode; never {@code null}
      */
     public static ModeProfile getProfile(DigitalMode mode) {
         // Prefer the mode's own stored bandwidth when it has been set.
@@ -74,13 +66,12 @@ public class ModeProfile {
     }
 
     /**
-     * Returns the default occupied bandwidth in hertz for this mode profile.
+     * Returns the recommended bandwidth in hertz for this mode profile.
      *
-     * <p>Pass this value to
-     * {@link org.qualsh.lb.digitalmodes.spectrum.FrequencySelector#setBandwidth(double)}
-     * to snap the bandwidth markers to the mode's expected signal footprint.
+     * <p>Use this value to set the bandwidth markers on the spectrum display so they
+     * match the expected signal width for the selected mode.
      *
-     * @return bandwidth in hertz; always greater than or equal to 1.0
+     * @return bandwidth in hertz; always greater than {@code 0.0}
      */
     public double getDefaultBandwidthHz() {
         return defaultBandwidthHz;

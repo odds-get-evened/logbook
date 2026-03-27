@@ -5,25 +5,19 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the BPSK31 (Binary Phase Shift Keying, 31 baud) digital mode.
+ * Encodes your typed message into a BPSK31 audio signal ready for preview or transmission.
  *
- * <p>PSK31 is one of the most popular keyboard-to-keyboard HF modes. On the
- * air it sounds like a soft, steady warble — a single audio tone whose phase
- * shifts with every character transmitted. The signal is extremely narrow
- * (about 31 Hz) and can be heard clearly even when many stations are packed
- * into a crowded 3 kHz SSB passband.
- *
- * <p>BPSK31 encodes each character using the Varicode scheme: common letters
- * are represented by short bit patterns and rare characters by longer ones,
- * giving an average typing speed of around 50 words per minute. The carrier is
- * centred at {@value #BPSK31_CENTER_FREQUENCY_HZ} Hz within the audio
- * passband, with phase reversals of {@value #BPSK31_PHASE_SHIFT_RADIANS}
- * radians marking each bit transition at a symbol rate of
- * {@value #BPSK31_BAUD_RATE} baud.
+ * <p>PSK31 is one of the most popular keyboard-to-keyboard HF modes. On the air it sounds
+ * like a soft, steady warble — a single audio tone whose phase shifts with every character
+ * you type. The signal is extremely narrow (about 31 Hz wide) so many stations can share
+ * the same band without interfering with each other.
  *
  * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. Open <em>Preferences &rarr; Station</em>
- * if it has not been configured yet.
+ * {@link #setOperatorCallsign(String)}. Open Preferences → Station if it has not been
+ * configured yet.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class Bpsk31Encoder implements Encoder {
 
@@ -40,9 +34,8 @@ public class Bpsk31Encoder implements Encoder {
     private String operatorCallsign;
 
     /**
-     * Creates a new {@code Bpsk31Encoder}, loading the PSK31 mode profile with its
-     * default bandwidth and signal parameters. The operator callsign is initially
-     * empty; set it with {@link #setOperatorCallsign(String)} before encoding.
+     * Creates a new BPSK31 encoder. Set your callsign with {@link #setOperatorCallsign(String)}
+     * before encoding.
      */
     public Bpsk31Encoder() {
         DigitalMode mode = new DigitalMode("Phase Shift Keying 31", "PSK31");
@@ -61,8 +54,11 @@ public class Bpsk31Encoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when an operator callsign has been configured and
-     * the encoder is ready to produce a transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
+     *
+     * <p>At minimum your callsign must be set. Open Preferences → Station to fill in
+     * any missing details.
      *
      * @return {@code true} if the callsign is set; {@code false} otherwise
      */
@@ -72,23 +68,16 @@ public class Bpsk31Encoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into a BPSK31 audio stream.
+     * Converts your typed message into a BPSK31 audio signal ready for preview or transmission.
      *
-     * <p>There is no hard character limit for BPSK31, but messages longer than
-     * 500 characters may result in very long transmissions. The audio is
-     * generated at {@value #BPSK31_BAUD_RATE} baud, centred at
-     * {@value #BPSK31_CENTER_FREQUENCY_HZ} Hz, with phase shifts of
-     * {@value #BPSK31_PHASE_SHIFT_RADIANS} radians between symbols.
-     *
-     * <p>The returned buffer contains silence as a placeholder; actual BPSK
-     * waveform synthesis using Varicode encoding is deferred to a future DSP
-     * implementation phase.
+     * <p>There is no hard character limit for BPSK31, but messages longer than 500 characters
+     * may result in very long transmissions. Your callsign must be set before calling this
+     * method — open Preferences → Station if it has not been configured yet.
      *
      * @param text the message to encode; must not be {@code null} or blank
      * @param mode the digital mode (should be PSK31)
-     * @return an {@link AudioBuffer} containing the encoded audio stream
-     * @throws EncoderException if the message is empty or the operator
-     *         callsign has not been set
+     * @return an {@link AudioBuffer} containing the encoded audio signal; never {@code null}
+     * @throws EncoderException if the message is empty or the operator callsign has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

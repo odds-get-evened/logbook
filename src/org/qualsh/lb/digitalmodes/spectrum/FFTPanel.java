@@ -9,27 +9,17 @@ import java.awt.*;
 import java.awt.geom.AffineTransform;
 
 /**
- * A real-time FFT spectrum display panel for the Digital Modes feature.
+ * Displays a live frequency spectrum graph of the loaded audio.
  *
- * <p>{@code FFTPanel} continuously reads audio data from a connected
- * {@link AudioBuffer}, computes a Fast Fourier Transform (FFT), and paints a
- * frequency-vs-magnitude graph that refreshes approximately 10 times per second.
- * The display uses a dark background with a green trace, subtle grid lines, and
- * labelled frequency and level axes.
+ * <p>The spectrum panel shows signal strength on the vertical axis and frequency in Hz on the
+ * horizontal axis, with a green trace on a dark background. It updates approximately 10 times
+ * per second. When no audio is loaded, the panel shows "No Signal".
  *
- * <p>The panel renders the frequency spectrum on the X axis and signal strength
- * on the Y axis. Frequency tick labels are derived from the buffer's sample rate
- * so that each bin's true Hz value is shown.
+ * <p>Connect the panel to the application's audio using {@link #setBuffer(AudioBuffer)}.
+ * The display will automatically refresh whenever the audio changes.
  *
- * <p>Typical usage:
- * <pre>
- *   FFTPanel spectrum = new FFTPanel();
- *   spectrum.setBuffer(myAudioBuffer);
- *   parentPanel.add(spectrum);
- * </pre>
- *
- * <p>When no buffer is connected, or the buffer is empty, the text "No Signal"
- * is displayed centred on the panel.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class FFTPanel extends JPanel implements AudioBufferListener {
 
@@ -53,11 +43,8 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code FFTPanel} with a preferred size of 800 × 150 pixels.
-     *
-     * <p>A refresh timer is started immediately; the panel will repaint at
-     * approximately 10 Hz once added to a visible component hierarchy. Call
-     * {@link #setBuffer(AudioBuffer)} to connect audio data.
+     * Creates a new spectrum display panel. Call {@link #setBuffer(AudioBuffer)} to connect
+     * audio data so the display has something to show.
      */
     public FFTPanel() {
         setPreferredSize(new Dimension(800, 150));
@@ -75,16 +62,12 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Connects this panel to the given {@link AudioBuffer}.
+     * Connects this spectrum display to the given audio buffer.
      *
-     * <p>When a new buffer is supplied any previously connected buffer is
-     * unsubscribed first. This panel registers itself as an
-     * {@link AudioBufferListener} on the new buffer so that the FFT magnitude
-     * array is immediately recalculated whenever the buffer content changes.
-     * Passing {@code null} disconnects the panel from any buffer, causing it to
-     * display "No Signal".
+     * <p>The display immediately begins showing the spectrum of audio from the new buffer.
+     * Passing {@code null} disconnects the display and shows "No Signal".
      *
-     * @param buffer the audio buffer to visualise, or {@code null} to disconnect
+     * @param buffer the audio buffer to display, or {@code null} to disconnect
      */
     public void setBuffer(AudioBuffer buffer) {
         if (this.buffer != null) {
@@ -98,13 +81,10 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Called automatically when the connected {@link AudioBuffer} is loaded or
-     * cleared.
+     * Called automatically when the connected audio buffer is loaded or cleared.
      *
-     * <p>Triggers an immediate recalculation of the FFT magnitudes so the next
-     * repaint reflects the latest audio data. This method may be invoked on any
-     * thread; the refresh timer will pick up the updated magnitudes at its next
-     * tick and schedule a repaint on the Event Dispatch Thread.
+     * <p>The spectrum display immediately recalculates and shows the new audio on the
+     * next refresh. You do not need to call this method directly.
      *
      * @param buffer the buffer whose content changed; never {@code null}
      */
@@ -114,18 +94,11 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Recomputes the FFT magnitude array from the current buffer contents.
+     * Recalculates the frequency spectrum from the current audio buffer.
      *
-     * <p>Raw 16-bit signed little-endian PCM bytes are converted to normalised
-     * {@code double} samples in the range −1.0 to 1.0, zero-padded to the next
-     * power of two, and passed through a {@link DiscreteFourier} transform. The
-     * resulting magnitude array is stored internally and used by the next
-     * {@link #paintComponent} call.
-     *
-     * <p>If the buffer is absent or empty, the magnitude array is set to empty
-     * and the panel will display "No Signal". Any exception raised during FFT
-     * computation is silently caught and also results in an empty magnitude
-     * array.
+     * <p>If the buffer is empty or absent the display will show "No Signal" on the next repaint.
+     * This method is called automatically on each refresh tick; you can also call it manually
+     * to force an immediate update.
      */
     public void updateMagnitudes() {
         if (buffer == null || buffer.isEmpty()) {
@@ -165,23 +138,13 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Paints the frequency spectrum graph.
+     * Draws the frequency spectrum graph on screen.
      *
-     * <p>When audio data is available the panel renders:
-     * <ul>
-     *   <li>A subtle grid of vertical lines (every 50 pixels) and horizontal
-     *       lines at 25 %, 50 %, and 75 % of the draw area height</li>
-     *   <li>A semi-transparent filled area under the magnitude trace</li>
-     *   <li>A solid green magnitude trace drawn on top of the fill</li>
-     *   <li>Frequency tick labels along the X axis, derived from the buffer's
-     *       sample rate and FFT bin width</li>
-     *   <li>Axis labels "Frequency (Hz)" and "Level"</li>
-     * </ul>
-     * When no audio data is present, the text "No Signal" is displayed centred
-     * on the panel.
+     * <p>This method is called automatically by the display framework. When audio is loaded
+     * it draws the green spectrum trace with frequency labels. When no audio is present it
+     * displays "No Signal" instead.
      *
-     * @param g the {@code Graphics} context provided by Swing; must not be
-     *          {@code null}
+     * @param g the graphics context provided by the display framework; must not be {@code null}
      */
     @Override
     protected void paintComponent(Graphics g) {
@@ -324,7 +287,7 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     /**
      * Returns the preferred display size of this panel.
      *
-     * @return a {@link Dimension} of 800 × 150 pixels
+     * @return a {@link Dimension} of 800 × 150 pixels; never {@code null}
      */
     @Override
     public Dimension getPreferredSize() {

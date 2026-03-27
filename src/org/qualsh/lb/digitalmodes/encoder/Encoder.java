@@ -4,75 +4,52 @@ import org.qualsh.lb.digital.DigitalMode;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 
 /**
- * Contract for digital mode encoders that convert typed text into audio signals
- * ready for radio transmission.
+ * The shared contract that all digital-mode encoders in the application follow.
  *
- * <p>Each encoder handles one specific digital mode (FT8, WSPR, PSK31, and so on)
- * and knows how to turn a plain-text message into a block of 16-bit mono PCM audio
- * that can be sent directly to the radio's microphone input. The Transmit tab in the
- * application lets you compose a message, pick a digital mode, and press <em>Transmit</em>
- * — the appropriate encoder is selected automatically and produces the audio that goes
- * on air.
+ * <p>Each encoder handles one specific digital mode — FT8, WSPR, BPSK31, and so on —
+ * and knows how to turn your typed message into an audio signal ready for transmission.
+ * On the Encode tab, type your message, choose a mode, and press Encode — the correct
+ * encoder is selected automatically.
  *
- * <p>Before calling {@link #encode(String, DigitalMode)}, check
- * {@link #isReadyToEncode()} to confirm that any required operator details
- * (callsign, Maidenhead grid square, etc.) have been configured. If the encoder is
- * not ready, the encode call will throw an {@link EncoderException} explaining what
- * information is missing.
+ * <p>Before encoding, check {@link #isReadyToEncode()} to confirm your callsign and
+ * any other required details are configured. Open Preferences → Station to set your
+ * callsign application-wide.
  *
- * <p>Usage example:
- * <pre>
- *     Encoder encoder = new Ft8Encoder();
- *     encoder.setOperatorCallsign("W1AW");
- *     if (encoder.isReadyToEncode()) {
- *         AudioBuffer audio = encoder.encode("CQ DX W1AW FN31", encoder.getMode());
- *         // send audio to the radio
- *     }
- * </pre>
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public interface Encoder {
 
     /**
-     * Encodes the supplied text message into a block of audio suitable for
-     * radio transmission in the given digital mode.
+     * Converts your typed message into an audio signal ready for preview or transmission.
      *
-     * <p>The returned {@link AudioBuffer} contains 16-bit signed mono PCM audio
-     * at 8 000 Hz. Pass this buffer to the transmit pipeline to put the signal
-     * on air. The method verifies that the encoder is ready and that the message
-     * text meets the constraints of the chosen mode (length limits, character
-     * set, etc.) before generating audio.
+     * <p>The returned audio buffer can be previewed through your speakers or sent to your
+     * radio. An {@link EncoderException} is thrown if your message is empty, too long for
+     * the selected mode, or if required station details are missing.
      *
-     * @param text the message to transmit; must not be {@code null} or blank
+     * @param text the message to encode; must not be {@code null} or blank
      * @param mode the digital mode to use for encoding
-     * @return an {@link AudioBuffer} containing the encoded audio; never
-     *         {@code null}
-     * @throws EncoderException if the message is empty or invalid, if required
-     *         operator details have not been configured, or if a signal
-     *         generation error occurs
+     * @return an audio buffer containing the encoded signal; never {@code null}
+     * @throws EncoderException if the message is invalid or required configuration is missing
      */
     AudioBuffer encode(String text, DigitalMode mode) throws EncoderException;
 
     /**
-     * Returns the {@link DigitalMode} that this encoder produces.
-     *
-     * <p>Use this to label the outgoing audio or to record the mode in your
-     * log entry after a successful transmission.
+     * Returns the digital mode that this encoder produces.
      *
      * @return the digital mode handled by this encoder; never {@code null}
      */
     DigitalMode getMode();
 
     /**
-     * Returns {@code true} when the encoder has all the information it needs
-     * to produce a valid transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
      *
-     * <p>At minimum this means your operator callsign has been set. Some modes
-     * require additional data — for example WSPR also needs a Maidenhead grid
-     * square, and Packet requires a destination callsign. Open
-     * <em>Preferences &rarr; Station</em> to fill in any missing details.
+     * <p>At minimum your callsign must be set. WSPR also requires a grid square, and
+     * Packet requires a destination callsign. Open Preferences → Station to fill in
+     * any missing details.
      *
-     * @return {@code true} if the encoder is ready; {@code false} if required
-     *         configuration is missing
+     * @return {@code true} if the encoder is ready; {@code false} if required details are missing
      */
     boolean isReadyToEncode();
 
@@ -81,29 +58,30 @@ public interface Encoder {
     // -------------------------------------------------------------------------
 
     /**
-     * Thrown when an {@link Encoder} cannot produce audio for a given message.
+     * Reported when the encoder cannot produce audio for a given message.
      *
-     * <p>Common causes include an empty message, a message that exceeds the
-     * maximum length allowed by the mode, or missing operator configuration
-     * such as a callsign or grid square. Read the exception message for a
-     * plain-English explanation that can be shown directly in the user
-     * interface.
+     * <p>Common causes include an empty message, a message that is too long for the selected
+     * mode, or a missing callsign or grid square. The error message explains what needs to be
+     * fixed in plain English and is shown directly in the Encode panel status area.
+     *
+     * @author Logbook Development Team
+     * @version 1.0
      */
     class EncoderException extends Exception {
 
         /**
-         * Creates an {@code EncoderException} with the supplied description.
+         * Creates an encoder error with a plain-English explanation.
          *
-         * @param message a human-readable explanation of why encoding failed
+         * @param message a description of why encoding failed
          */
         public EncoderException(String message) {
             super(message);
         }
 
         /**
-         * Creates an {@code EncoderException} wrapping an underlying cause.
+         * Creates an encoder error with a plain-English explanation and the underlying cause.
          *
-         * @param message a human-readable explanation of why encoding failed
+         * @param message a description of why encoding failed
          * @param cause   the original exception that triggered this failure
          */
         public EncoderException(String message, Throwable cause) {

@@ -11,27 +11,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the WSPR digital mode.
+ * Decodes WSPR signals from loaded audio.
  *
- * <p>WSPR (Weak Signal Propagation Reporter, pronounced "whisper") is a
- * narrow-band digital mode designed exclusively for automated propagation
- * testing across the amateur radio bands. Stations transmit a short,
- * structured beacon that encodes their callsign, Maidenhead grid square, and
- * transmit power level in a signal occupying only about 6&nbsp;Hz of
- * bandwidth — among the narrowest of any amateur digital mode.
+ * <p>WSPR (pronounced "whisper") is used to test how far a very low-power signal can travel.
+ * It operates on 2-minute intervals and is decoded automatically without operator interaction.
+ * Decoded spots are uploaded to the WSPRnet website, building a real-time global map of
+ * propagation conditions.
  *
- * <p>WSPR operates on fixed 2-minute (120-second) time slots aligned to
- * even UTC minutes. Transmissions typically use extremely low power levels
- * (milliwatts to a few watts), yet can be received reliably thousands of
- * kilometres away thanks to powerful forward error correction. Spots are
- * automatically uploaded to the <em>WSPRnet</em> database, providing a
- * real-time global map of propagation conditions.
+ * <p>Each WSPR transmission encodes only the station's callsign, grid square, and transmit
+ * power — no free text is sent. At least 110 seconds of audio must be loaded before this
+ * decoder can attempt to find a signal.
  *
- * <p>This implementation performs spectral analysis via a Discrete Fourier
- * Transform to locate the dominant signal peak and provides a stub
- * {@link DecodeResult} with frequency and estimated SNR information. Full
- * message decoding (convolutional coding, synchronisation, message
- * unpacking) is not yet implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class WsprDecoder {
 
@@ -46,8 +38,7 @@ public class WsprDecoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code WsprDecoder}, loading the WSPR mode profile with
-     * its default bandwidth and signal parameters.
+     * Creates a new WSPR decoder with default signal parameters.
      */
     public WsprDecoder() {
         mode = new DigitalMode("WSPR", "WSPR");
@@ -56,7 +47,7 @@ public class WsprDecoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the WSPR digital mode; never {@code null}
      */
@@ -65,27 +56,14 @@ public class WsprDecoder {
     }
 
     /**
-     * Attempts to decode a WSPR frame from the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any WSPR signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_FRAME_SECONDS} seconds
-     * of 16-bit signed little-endian mono PCM audio. WSPR transmissions span
-     * approximately 110 seconds of the 120-second slot; buffers shorter than
-     * this minimum are rejected and an empty list is returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * At least 110 seconds of audio must be loaded; shorter recordings are skipped.
+     * An empty list is returned when no WSPR signals are detected.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the frame duration meets the WSPR minimum.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude spectrum.</li>
-     *   <li>Locate the peak magnitude bin and derive its frequency in Hz.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a frame is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded WSPR signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

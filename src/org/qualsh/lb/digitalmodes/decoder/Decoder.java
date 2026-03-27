@@ -7,37 +7,31 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import java.util.List;
 
 /**
- * Common contract for all digital-mode decoder implementations.
+ * The shared contract that all digital-mode decoders in the application follow.
  *
- * <p>Each concrete decoder handles one {@link DigitalMode} and is capable of
- * analysing an {@link AudioBuffer} to extract zero or more {@link DecodeResult}
- * objects. Decoders are stateless between calls to {@link #decode(AudioBuffer)};
- * the buffer must contain a complete (or sufficiently long) audio frame each
- * time {@code decode} is invoked.
+ * <p>Each decoder handles one specific digital mode — FT8, WSPR, BPSK31, and so on —
+ * and knows how to search the loaded audio for signals of that type. When signals are
+ * found, their details (time, mode, frequency, and decoded text) are returned as a list
+ * of results that appear in the decode output area and the decode log.
  *
- * <p>Implementations should return an empty list — never {@code null} — when
- * the buffer is too short, does not contain a recognisable signal, or an error
- * occurs during analysis.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public interface Decoder {
 
     /**
-     * Analyses the supplied audio buffer and returns any decode results found.
+     * Analyzes the loaded audio and attempts to find and decode any signals of this mode present.
      *
-     * <p>The buffer is expected to contain 16-bit, mono, signed,
-     * little-endian PCM audio. Short or empty buffers should be handled
-     * gracefully and will typically yield an empty result list.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * An empty list is returned when no signals are found or the audio is too short.
      *
-     * <p>This method may be called from a background thread; implementations
-     * must not touch Swing components directly.
-     *
-     * @param buffer the audio data to analyse; must not be {@code null}
-     * @return a list of decode results, possibly empty; never {@code null}
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded signals, possibly empty; never {@code null}
      */
     List<DecodeResult> decode(AudioBuffer buffer);
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode that this decoder handles.
      *
      * @return the associated digital mode; never {@code null}
      */

@@ -12,17 +12,16 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Table model backing the decode log table in the Digital Modes panel.
+ * Stores the list of decoded signals shown in the decode log table.
  *
- * <p>Each row represents one {@link DecodeResult} produced by an active
- * decoder. The model exposes four read-only columns — Time, Mode, Frequency,
- * and Decoded Text — and caps its row count at {@value #MAX_ROWS} to prevent
- * unbounded memory growth during long decode sessions. When the cap is
- * reached the oldest result is silently discarded as each new one arrives.
+ * <p>Each row represents one decoded signal and shows its time, mode, frequency, and decoded
+ * text. To keep memory usage sensible during long sessions, only the most recent
+ * {@value #MAX_ROWS} entries are kept; older entries are quietly removed as new ones arrive.
+ * Use {@link #addResult(DecodeResult)} to add entries and {@link #clearResults()} to reset
+ * the log.
  *
- * <p>All mutations to the underlying list are dispatched on the Swing Event
- * Dispatch Thread, making it safe to call the public mutator methods from any
- * thread.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class DecodeLogModel extends AbstractTableModel {
 
@@ -38,7 +37,7 @@ public class DecodeLogModel extends AbstractTableModel {
     private final List<DecodeResult> data;
 
     /**
-     * Creates a new, empty {@code DecodeLogModel}.
+     * Creates a new, empty decode log model with no entries.
      */
     public DecodeLogModel() {
         data = new ArrayList<>();
@@ -76,15 +75,10 @@ public class DecodeLogModel extends AbstractTableModel {
     }
 
     /**
-     * Returns the cell value for the requested row and column.
+     * Returns the value for a specific cell in the log table.
      *
-     * <p>Column mapping:
-     * <ul>
-     *   <li>0 — decode time formatted as {@code HH:mm:ss}</li>
-     *   <li>1 — numeric digital-mode identifier</li>
-     *   <li>2 — audio frequency offset in hertz, one decimal place</li>
-     *   <li>3 — decoded message text</li>
-     * </ul>
+     * <p>Column 0 is the decode time, column 1 is the mode, column 2 is the frequency in Hz,
+     * and column 3 is the decoded text.
      *
      * @param rowIndex    the zero-based row index
      * @param columnIndex the zero-based column index
@@ -122,13 +116,10 @@ public class DecodeLogModel extends AbstractTableModel {
     }
 
     /**
-     * Appends a new decode result to the end of the log.
+     * Adds a decoded signal to the log.
      *
-     * <p>If the number of rows would exceed {@value #MAX_ROWS} after the
-     * insertion, the oldest result is removed first so the count stays at the
-     * limit. Registered table listeners are notified of the insertion.
-     *
-     * <p>This method is safe to call from any thread.
+     * <p>If the log is at its maximum size, the oldest entry is removed first to make room.
+     * The decode log table updates automatically to show the new entry.
      *
      * @param result the decode result to add; must not be {@code null}
      */
@@ -145,10 +136,8 @@ public class DecodeLogModel extends AbstractTableModel {
     }
 
     /**
-     * Removes all decode results from the model and notifies registered table
-     * listeners.
-     *
-     * <p>This method is safe to call from any thread.
+     * Removes all entries from the decode log. The table updates automatically to show an
+     * empty log.
      */
     public void clearResults() {
         SwingUtilities.invokeLater(() -> {
@@ -158,10 +147,7 @@ public class DecodeLogModel extends AbstractTableModel {
     }
 
     /**
-     * Returns the {@link DecodeResult} at the given row index.
-     *
-     * <p>Use this when the user selects a row in the decode log table to
-     * inspect the full details of that result.
+     * Returns the decoded signal at the given row index.
      *
      * @param rowIndex the zero-based row index
      * @return the result at that row; never {@code null}
@@ -172,12 +158,7 @@ public class DecodeLogModel extends AbstractTableModel {
     }
 
     /**
-     * Returns an unmodifiable view of all decode results currently held by
-     * this model.
-     *
-     * <p>The returned list reflects the model's state at the time of the call.
-     * Subsequent calls to {@link #addResult} or {@link #clearResults} are not
-     * reflected in a previously returned list.
+     * Returns all decoded signals currently in the log as an unmodifiable list.
      *
      * @return an unmodifiable list of all results; never {@code null}
      */

@@ -12,20 +12,15 @@ import java.io.File;
 import java.io.IOException;
 
 /**
- * An {@link AudioSource} that reads audio from a WAV file or records live
- * audio input to a WAV file.
+ * Handles loading WAV audio files from your computer and recording radio audio to WAV files.
  *
- * <p>Two usage patterns are supported:
- * <ol>
- *   <li><strong>File import</strong> — call {@link #loadFile(File)} to read
- *       an existing WAV file into the buffer immediately.</li>
- *   <li><strong>Live recording</strong> — call {@link #startRecording(File)}
- *       to capture microphone input into a WAV file, then
- *       {@link #stopRecording()} to finish and automatically load the
- *       recorded audio into the buffer.</li>
- * </ol>
+ * <p>You can load an existing WAV file for decoding via {@link #loadFile(File)}, or record
+ * live audio from your computer's audio input via {@link #startRecording(File)} and
+ * {@link #stopRecording()}. When recording stops, the recorded audio is automatically
+ * loaded into the decoder so you can decode it immediately.
  *
- * <p>Audio is stored as 16-bit, mono, signed, little-endian PCM at 8000 Hz.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class WavFileSource implements AudioSource {
 
@@ -37,10 +32,10 @@ public class WavFileSource implements AudioSource {
     private final AudioFormat recordingFormat;
 
     /**
-     * Creates a new {@code WavFileSource} with an empty buffer.
+     * Creates a new WAV file source with an empty audio buffer.
      *
-     * <p>The recording format is fixed at 8000 Hz, 16-bit, mono, signed,
-     * little-endian PCM.
+     * <p>The recording format is fixed at 8000 Hz, 16-bit, mono — suitable for
+     * all supported digital modes.
      */
     public WavFileSource() {
         this.buffer = new AudioBuffer();
@@ -56,18 +51,14 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Loads a WAV file into the buffer, replacing any previously held audio.
+     * Opens an audio file from your computer and loads it into the application for decoding.
      *
-     * <p>The file is decoded using {@link AudioSystem} and its raw PCM bytes
-     * are stored via {@link AudioBuffer#load(byte[], float)}. The file
-     * reference is retained and returned by {@link #getWavFile()}.
+     * <p>Any previously loaded audio is replaced. The spectrum display and decoder will
+     * immediately begin working with the newly loaded file.
      *
-     * @param file the WAV file to load; must not be {@code null} and must
-     *             exist on disk
-     * @throws IOException                   if an I/O error occurs reading
-     *                                       the file
-     * @throws UnsupportedAudioFileException if the file format is not
-     *                                       supported by the system
+     * @param file the WAV file to open; must not be {@code null} and must exist on disk
+     * @throws IOException                   if the file cannot be read
+     * @throws UnsupportedAudioFileException if the file format is not supported
      */
     public void loadFile(File file) throws IOException, UnsupportedAudioFileException {
         try (AudioInputStream ais = AudioSystem.getAudioInputStream(file)) {
@@ -79,16 +70,13 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Starts recording live audio input to the specified output file.
+     * Begins recording audio from your computer's audio input and saves it to the selected file.
      *
-     * <p>A {@link TargetDataLine} is opened with the fixed recording format
-     * (8000 Hz, 16-bit mono). Audio is captured on a background thread and
-     * written to {@code outputFile} as a WAV file using
-     * {@link AudioSystem#write}. Call {@link #stopRecording()} to finish.
+     * <p>Recording continues until you call {@link #stopRecording()}. The audio is saved
+     * as a WAV file at the path you specify.
      *
-     * @param outputFile the file to write the recorded WAV audio into
-     * @throws LineUnavailableException if no suitable input line is available
-     *                                  on the system
+     * @param outputFile the file to save the recording into
+     * @throws LineUnavailableException if no audio input is available on this computer
      */
     public void startRecording(File outputFile) throws LineUnavailableException {
         DataLine.Info info = new DataLine.Info(TargetDataLine.class, recordingFormat);
@@ -110,24 +98,15 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Stops an in-progress recording and loads the recorded audio into the
-     * buffer.
+     * Stops the current recording, saves the file, and automatically loads the recorded audio for decoding.
      *
-     * <p>The {@link TargetDataLine} is stopped and closed, the recording
-     * thread is joined, and {@link #loadFile(File)} is called on the output
-     * file so the buffer is immediately populated with the captured audio.
-     * After this call {@link #isRecording()} returns {@code false}.
+     * <p>After this call, the recorded audio is available in the spectrum display and decoder
+     * exactly as if you had opened the file manually. If no recording is in progress, this
+     * method does nothing.
      *
-     * <p>If no recording is in progress this method returns without doing
-     * anything.
-     *
-     * @throws InterruptedException          if the current thread is
-     *                                       interrupted while waiting for
-     *                                       the recording thread to finish
-     * @throws IOException                   if the recorded file cannot be
-     *                                       read back into the buffer
-     * @throws UnsupportedAudioFileException if the recorded file format is
-     *                                       not supported
+     * @throws InterruptedException          if the operation is interrupted while finishing the recording
+     * @throws IOException                   if the recorded file cannot be read back after saving
+     * @throws UnsupportedAudioFileException if the saved file format cannot be loaded
      */
     public void stopRecording()
             throws InterruptedException, IOException, UnsupportedAudioFileException {
@@ -148,10 +127,10 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * No-op for a file-based source.
+     * No action is taken for a file-based source.
      *
-     * <p>Use {@link #loadFile(File)} to populate the buffer from a WAV file,
-     * or {@link #startRecording(File)} to begin live capture.
+     * <p>Use {@link #loadFile(File)} to open a WAV file, or
+     * {@link #startRecording(File)} to begin recording.
      */
     @Override
     public void start() {
@@ -161,10 +140,8 @@ public class WavFileSource implements AudioSource {
     /**
      * Stops an active recording if one is in progress.
      *
-     * <p>Equivalent to calling {@link #stopRecording()} when
-     * {@link #isRecording()} is {@code true}. Errors during stop are
-     * silently swallowed so that callers are not forced to handle checked
-     * exceptions from a generic stop path.
+     * <p>Equivalent to pressing Stop Recording. Any errors during the stop
+     * are handled silently.
      */
     @Override
     public void stop() {
@@ -182,7 +159,7 @@ public class WavFileSource implements AudioSource {
     /**
      * Returns {@code true} while a live recording is in progress.
      *
-     * @return {@code true} if currently recording
+     * @return {@code true} if currently recording audio
      */
     @Override
     public boolean isActive() {
@@ -190,7 +167,7 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Returns the {@link AudioBuffer} used by this source.
+     * Returns the audio buffer used by this source.
      *
      * @return the buffer; never {@code null}
      */
@@ -200,7 +177,7 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Returns {@code true} while a live recording is in progress.
+     * Returns {@code true} if a live recording is currently in progress.
      *
      * @return {@code true} if currently recording
      */
@@ -209,8 +186,9 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Returns the WAV file most recently loaded or recorded to, or
-     * {@code null} if no file operation has been performed yet.
+     * Returns the WAV file most recently opened or recorded to.
+     *
+     * <p>Returns {@code null} if no file operation has been performed yet.
      *
      * @return the current WAV file, or {@code null}
      */

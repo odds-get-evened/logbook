@@ -10,21 +10,16 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 /**
- * A styled {@link JTable} that displays the history of decoded digital-mode
- * transmissions produced during an active decode session.
+ * The decode log table that shows the history of decoded signals in the current session.
  *
- * <p>The table is backed by a {@link DecodeLogModel} and renders each
- * {@link DecodeResult} as a single row with four columns: Time, Mode,
- * Frequency, and Decoded Text. Rows alternate between two dark background
- * colours for readability and the selected row is highlighted in green.
+ * <p>Each row represents one decoded signal and shows its time, mode, frequency, and decoded
+ * text. Rows alternate between two dark shades for easy reading, and clicking a row selects
+ * it. New results are added with {@link #addDecodeResult(DecodeResult)} and the view
+ * automatically scrolls to show the latest entry. Register a
+ * {@link DecodeResultSelectionListener} to be notified when the user clicks a row.
  *
- * <p>New results should be appended via {@link #addDecodeResult(DecodeResult)},
- * which also auto-scrolls the view so the latest entry is always visible.
- * The entire log can be wiped with {@link #clearResults()}.
- *
- * <p>An optional {@link DecodeResultSelectionListener} can be registered with
- * {@link #setDecodeResultSelectionListener(DecodeResultSelectionListener)} to
- * be notified whenever the user clicks a row.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class DecodeLogTable extends JTable {
 
@@ -46,24 +41,24 @@ public class DecodeLogTable extends JTable {
     private DecodeResultSelectionListener selectionListener;
 
     /**
-     * Callback interface notified when the user selects a row in the decode
-     * log table.
+     * Notified when the user clicks a row in the decode log table.
+     *
+     * @author Logbook Development Team
+     * @version 1.0
      */
     public interface DecodeResultSelectionListener {
         /**
-         * Called on the Swing Event Dispatch Thread when the user clicks a row.
+         * Called when the user clicks a row in the decode log table.
          *
-         * @param result the {@link DecodeResult} that was selected; never
-         *               {@code null}
+         * @param result the decoded signal that was selected; never {@code null}
          */
         void onDecodeResultSelected(DecodeResult result);
     }
 
     /**
-     * Creates a new {@code DecodeLogTable} backed by the given model.
+     * Creates a new decode log table backed by the given model.
      *
-     * @param model the {@link DecodeLogModel} that supplies row data; must not
-     *              be {@code null}
+     * @param model the model that supplies the row data; must not be {@code null}
      */
     public DecodeLogTable(DecodeLogModel model) {
         super(model);
@@ -135,11 +130,7 @@ public class DecodeLogTable extends JTable {
     }
 
     /**
-     * Appends a decode result to the log and scrolls the view so the newest
-     * entry is visible.
-     *
-     * <p>This method delegates storage to the underlying {@link DecodeLogModel}
-     * and may be called from any thread.
+     * Adds a decoded signal to the log and scrolls the table to show the newest entry.
      *
      * @param result the decode result to add; must not be {@code null}
      */
@@ -149,19 +140,15 @@ public class DecodeLogTable extends JTable {
     }
 
     /**
-     * Removes all decode results from the log.
-     *
-     * <p>This method delegates to the underlying {@link DecodeLogModel} and
-     * may be called from any thread.
+     * Removes all entries from the decode log, leaving an empty table.
      */
     public void clearResults() {
         decodeLogModel.clearResults();
     }
 
     /**
-     * Scrolls the table viewport so that the last (newest) row is visible.
-     *
-     * <p>Has no effect if the table is currently empty.
+     * Scrolls the table to bring the most recently added row into view. Does nothing if the
+     * log is empty.
      */
     public void scrollToLatestRow() {
         if (getRowCount() > 0) {
@@ -170,10 +157,8 @@ public class DecodeLogTable extends JTable {
     }
 
     /**
-     * Registers a listener that will be notified when the user clicks a row in
-     * the table.
-     *
-     * <p>Passing {@code null} removes any previously registered listener.
+     * Registers a listener to be notified when the user clicks a row. Pass {@code null} to
+     * remove any existing listener.
      *
      * @param listener the listener to register, or {@code null} to deregister
      */
@@ -182,9 +167,9 @@ public class DecodeLogTable extends JTable {
     }
 
     /**
-     * Returns the {@link DecodeLogModel} that backs this table.
+     * Returns the model that backs this table.
      *
-     * @return the model; never {@code null}
+     * @return the decode log model; never {@code null}
      */
     public DecodeLogModel getDecodeLogModel() {
         return decodeLogModel;

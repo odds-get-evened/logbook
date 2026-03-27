@@ -7,19 +7,19 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Central shared audio data store for the Digital Modes feature.
+ * The application's audio memory — it holds whatever audio is currently loaded,
+ * whether captured live from a radio rig, recorded from a microphone, or imported
+ * from a WAV file on your computer.
  *
- * <p>All audio sources — rig audio capture, WAV file import, and live
- * recording — write into this buffer via {@link #load(byte[], float)}.
- * All decoders and the spectrum display read from it via
- * {@link #getSamples()} and {@link #getSampleRate()}.
+ * <p>Only one block of audio can be held at a time; loading new audio completely
+ * replaces whatever was there before. The spectrum display and all decoders read
+ * directly from this buffer, so any change here is immediately reflected on screen.
  *
- * <p>Loading new audio <em>completely replaces</em> any existing content;
- * audio is never appended. Interested components register as
- * {@link AudioBufferListener listeners} to be notified whenever the buffer
- * content changes.
+ * <p>Any part of the application that needs to know when audio changes can
+ * register as a listener via {@link #addListener(AudioBufferListener)}.
  *
- * <p>Audio data is expected to be 16-bit, mono, little-endian PCM.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class AudioBuffer {
 
@@ -29,25 +29,23 @@ public class AudioBuffer {
     private final List<AudioBufferListener> listeners;
 
     /**
-     * Listener interface for components that need to react whenever the
-     * audio buffer is replaced or cleared.
+     * Notified whenever the audio held in the application's memory is replaced or cleared.
+     *
+     * <p>The spectrum display and decoders register as listeners so they can update
+     * themselves automatically each time new audio is loaded or cleared.
      */
     public interface AudioBufferListener {
 
         /**
-         * Called after the buffer content has been replaced by a
-         * {@link AudioBuffer#load(byte[], float) load} or
-         * {@link AudioBuffer#clear() clear} operation.
+         * Called after the audio in memory has been replaced by a load or clear operation.
          *
-         * @param buffer the {@link AudioBuffer} whose content changed;
-         *               never {@code null}
+         * @param buffer the audio buffer whose content just changed; never {@code null}
          */
         void onBufferChanged(AudioBuffer buffer);
     }
 
     /**
-     * Creates a new, empty {@code AudioBuffer} with no associated mode and
-     * no registered listeners.
+     * Creates a new, empty audio buffer with no audio loaded and no listeners registered.
      */
     public AudioBuffer() {
         this.samples = new byte[0];
@@ -57,17 +55,14 @@ public class AudioBuffer {
     }
 
     /**
-     * Replaces the current buffer content with the supplied PCM audio data.
+     * Loads new audio into memory, replacing any previously loaded audio.
      *
-     * <p>The provided array is copied defensively, so subsequent changes to
-     * the caller's array do not affect the buffer. Any previously held audio
-     * data is discarded. All registered listeners are notified after the
-     * replacement is complete.
+     * <p>The spectrum display and decoder will immediately begin working with the
+     * new audio. Any audio that was loaded before this call is permanently discarded.
      *
-     * @param samples    the raw 16-bit mono PCM bytes to store; must not be
-     *                   {@code null}
-     * @param sampleRate the number of samples per second, for example
-     *                   {@code 8000.0f} or {@code 44100.0f}
+     * @param samples    the raw audio data to load; must not be {@code null}
+     * @param sampleRate the number of audio samples per second in the supplied data,
+     *                   for example {@code 8000.0f} or {@code 44100.0f}
      * @throws IllegalArgumentException if {@code samples} is {@code null}
      */
     public void load(byte[] samples, float sampleRate) {
@@ -80,11 +75,10 @@ public class AudioBuffer {
     }
 
     /**
-     * Clears the buffer, discarding all audio data and resetting the sample
-     * rate to zero.
+     * Removes all audio from memory.
      *
-     * <p>After this call, {@link #isEmpty()} returns {@code true}. All
-     * registered listeners are notified.
+     * <p>The spectrum display will go blank until new audio is loaded.
+     * After this call, {@link #isEmpty()} returns {@code true}.
      */
     public void clear() {
         this.samples = new byte[0];
@@ -93,23 +87,21 @@ public class AudioBuffer {
     }
 
     /**
-     * Returns {@code true} if the buffer contains no audio data.
+     * Returns {@code true} if no audio has been loaded yet, or if the audio has been cleared.
      *
-     * @return {@code true} when the internal samples array is {@code null}
-     *         or has a length of zero
+     * @return {@code true} when no audio is available
      */
     public boolean isEmpty() {
         return samples == null || samples.length == 0;
     }
 
     /**
-     * Returns a defensive copy of the raw PCM audio bytes currently held in
-     * the buffer.
+     * Returns the raw audio data currently held in memory.
      *
-     * <p>Modifying the returned array has no effect on the buffer's internal
-     * state. Returns an empty array when the buffer is empty.
+     * <p>Returns an empty array if no audio has been loaded. The returned data
+     * is a copy, so modifying it has no effect on the stored audio.
      *
-     * @return a copy of the stored PCM bytes; never {@code null}
+     * @return a copy of the stored audio bytes; never {@code null}
      */
     public byte[] getSamples() {
         if (samples == null) {
@@ -119,23 +111,23 @@ public class AudioBuffer {
     }
 
     /**
-     * Returns the sample rate of the audio currently held in the buffer.
+     * Returns the sample rate of the audio currently loaded, measured in samples per second.
      *
-     * @return samples per second, for example {@code 44100.0f}; {@code 0.0f}
-     *         when the buffer is empty
+     * <p>Common values are {@code 8000.0f} and {@code 44100.0f}. Returns {@code 0.0f}
+     * if no audio is loaded.
+     *
+     * @return samples per second; {@code 0.0f} when no audio is loaded
      */
     public float getSampleRate() {
         return sampleRate;
     }
 
     /**
-     * Calculates and returns the duration of the buffered audio in seconds.
+     * Returns the total length of the loaded audio in seconds.
      *
-     * <p>The calculation assumes 16-bit mono PCM encoding (2 bytes per
-     * sample). Returns {@code 0.0} when the buffer is empty or the sample
-     * rate is zero.
+     * <p>Returns {@code 0.0} when no audio is loaded or the sample rate is unknown.
      *
-     * @return duration in seconds, or {@code 0.0} if the buffer is empty
+     * @return duration in seconds, or {@code 0.0} if no audio is loaded
      */
     public double getDurationSeconds() {
         if (isEmpty() || sampleRate == 0.0f) {
@@ -146,19 +138,19 @@ public class AudioBuffer {
     }
 
     /**
-     * Associates a {@link DigitalMode} with this buffer.
+     * Records which digital mode the audio was captured or imported for.
      *
-     * <p>This records which digital mode the current audio was captured or
-     * imported for. May be set to {@code null} to clear the association.
+     * <p>This is set automatically when you change the active mode in the Mode selector.
+     * Pass {@code null} to clear the association.
      *
-     * @param mode the digital mode to associate, or {@code null}
+     * @param mode the digital mode to associate with the current audio, or {@code null}
      */
     public void setAssociatedMode(DigitalMode mode) {
         this.associatedMode = mode;
     }
 
     /**
-     * Returns the {@link DigitalMode} currently associated with this buffer,
+     * Returns the digital mode associated with the currently loaded audio,
      * or {@code null} if none has been set.
      *
      * @return the associated digital mode, or {@code null}
@@ -168,11 +160,10 @@ public class AudioBuffer {
     }
 
     /**
-     * Registers a listener to be notified whenever the buffer content is
-     * replaced or cleared.
+     * Registers a listener to be notified whenever the audio in memory is replaced or cleared.
      *
-     * <p>Adding the same listener instance more than once will result in it
-     * receiving multiple notifications per event.
+     * <p>The spectrum display and decoders use this internally to keep themselves up to date.
+     * Adding the same listener more than once will cause it to receive duplicate notifications.
      *
      * @param listener the listener to add; must not be {@code null}
      */
@@ -181,11 +172,9 @@ public class AudioBuffer {
     }
 
     /**
-     * Removes a previously registered listener.
+     * Removes a previously registered listener so it no longer receives audio change notifications.
      *
-     * <p>If the listener was registered more than once, only the first
-     * occurrence is removed. Has no effect if the listener is not currently
-     * registered.
+     * <p>Has no effect if the listener is not currently registered.
      *
      * @param listener the listener to remove; must not be {@code null}
      */

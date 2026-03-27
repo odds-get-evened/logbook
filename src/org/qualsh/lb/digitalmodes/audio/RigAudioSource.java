@@ -7,20 +7,18 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * An {@link AudioSource} that captures audio from a radio rig connected via
- * a USB serial port.
+ * Connects to a radio rig over a USB cable and streams live audio into the application.
  *
- * <p>Use {@link #getAvailablePorts()} to enumerate ports on the host system,
- * then construct an instance with the desired port name and baud rate. Call
- * {@link #start()} to open the port and begin streaming audio data into the
- * associated {@link AudioBuffer}; call {@link #stop()} to end capture and
- * release the port.
+ * <p>Use {@link #getAvailablePorts()} to find available USB serial ports on your
+ * computer, then select the correct port in Preferences and click the Rig button to
+ * start streaming audio directly from your transceiver into the spectrum display and
+ * decoder.
  *
- * <p>Audio data arriving over the serial link is treated as raw 16-bit mono
- * PCM bytes at the configured {@link #getSampleRate() sample rate} (default
- * {@code 8000.0f} Hz). The buffer is updated continuously as data arrives,
- * so any registered {@link AudioBuffer.AudioBufferListener} will receive
- * frequent notifications while capture is active.
+ * <p>Audio arrives continuously while the connection is active. Call {@link #stop()}
+ * to disconnect from the rig and release the USB port.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class RigAudioSource implements AudioSource {
 
@@ -36,16 +34,14 @@ public class RigAudioSource implements AudioSource {
     private boolean active;
 
     /**
-     * Creates a new {@code RigAudioSource} targeting the given serial port.
+     * Creates a new rig audio source targeting the given USB serial port.
      *
-     * <p>The source is not active after construction; call {@link #start()}
-     * to begin capture.
+     * <p>The connection is not opened until you call {@link #start()}.
      *
-     * @param portName the system name of the serial port, for example
-     *                 {@code "/dev/ttyUSB0"} on Linux or {@code "COM3"} on
-     *                 Windows
-     * @param baudRate the baud rate to use when opening the port, for example
-     *                 {@code 9600} or {@code 115200}
+     * @param portName the name of the serial port to connect to, for example
+     *                 {@code "/dev/ttyUSB0"} on Linux or {@code "COM3"} on Windows
+     * @param baudRate the baud rate matching your rig's serial configuration, for
+     *                 example {@code 9600} or {@code 115200}
      */
     public RigAudioSource(String portName, int baudRate) {
         this.portName = portName;
@@ -55,20 +51,12 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Opens the serial port and begins streaming audio data into the
-     * {@link AudioBuffer}.
+     * Begins listening to the radio rig over the configured USB serial connection.
      *
-     * <p>A background thread is started that continuously reads bytes from
-     * the serial port in chunks of up to {@value #READ_BUFFER_SIZE} bytes.
-     * Each successful read appends to an accumulating byte stream, and the
-     * buffer is updated with the full accumulated data on every chunk
-     * received.
-     *
-     * <p>If the port cannot be opened (for example because it does not exist
-     * or is already in use) a warning is printed to {@code System.err} and
-     * this method returns without starting capture.
-     *
-     * <p>This method has no effect if the source is already active.
+     * <p>Audio will appear in the spectrum display within a few seconds of calling this method.
+     * If the port cannot be opened — for example because your rig is not connected or the port
+     * is already in use — no audio is captured and an error is logged. This method has no effect
+     * if the rig is already connected.
      */
     @Override
     public void start() {
@@ -111,11 +99,10 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Stops audio capture, interrupts the background read thread, closes the
-     * serial port, and clears the {@link AudioBuffer}.
+     * Disconnects from the radio rig and clears the audio buffer.
      *
-     * <p>After this call, {@link #isActive()} returns {@code false}. This
-     * method has no effect if the source is not currently active.
+     * <p>The USB serial port is released and the spectrum display will go blank.
+     * This method has no effect if the rig is not currently connected.
      */
     @Override
     public void stop() {
@@ -139,10 +126,9 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns {@code true} if the source is currently capturing audio from
-     * the serial port.
+     * Returns {@code true} if the rig is currently connected and sending audio.
      *
-     * @return {@code true} while capture is in progress
+     * @return {@code true} while audio capture is in progress
      */
     @Override
     public boolean isActive() {
@@ -150,8 +136,7 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns the {@link AudioBuffer} that receives audio data from this
-     * source.
+     * Returns the audio buffer that receives the live audio from the rig.
      *
      * @return the buffer; never {@code null}
      */
@@ -161,23 +146,21 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns the serial port name used by this source.
+     * Returns the name of the serial port this source is configured to use.
      *
-     * @return the port name, for example {@code "/dev/ttyUSB0"} or
-     *         {@code "COM3"}
+     * @return the port name, for example {@code "/dev/ttyUSB0"} or {@code "COM3"}
      */
     public String getPortName() {
         return portName;
     }
 
     /**
-     * Sets the serial port name to use when {@link #start()} is next called.
+     * Sets the serial port to connect to the next time {@link #start()} is called.
      *
-     * <p>This method has no effect if the source is currently active. Stop
-     * the source before changing the port name.
+     * <p>This has no effect while the rig is already connected. Disconnect first
+     * before changing the port.
      *
-     * @param portName the new port name, for example {@code "/dev/ttyUSB0"}
-     *                 or {@code "COM3"}
+     * @param portName the new port name, for example {@code "/dev/ttyUSB0"} or {@code "COM3"}
      */
     public void setPortName(String portName) {
         if (!active) {
@@ -186,7 +169,7 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns the baud rate configured for the serial port.
+     * Returns the baud rate currently configured for the serial connection.
      *
      * @return the baud rate, for example {@code 9600} or {@code 115200}
      */
@@ -195,13 +178,12 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Sets the baud rate to use when {@link #start()} is next called.
+     * Sets the baud rate to use the next time {@link #start()} is called.
      *
-     * <p>This method has no effect if the source is currently active. Stop
-     * the source before changing the baud rate.
+     * <p>This has no effect while the rig is already connected. Disconnect first
+     * before changing the baud rate.
      *
-     * @param baudRate the new baud rate, for example {@code 9600} or
-     *                 {@code 115200}
+     * @param baudRate the new baud rate, for example {@code 9600} or {@code 115200}
      */
     public void setBaudRate(int baudRate) {
         if (!active) {
@@ -210,8 +192,7 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns the sample rate at which incoming bytes are interpreted as PCM
-     * audio data.
+     * Returns the sample rate used when interpreting incoming audio from the rig.
      *
      * @return samples per second; default is {@code 8000.0f}
      */
@@ -220,25 +201,22 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Sets the sample rate used when loading data into the {@link AudioBuffer}.
+     * Sets the sample rate used when loading rig audio into the buffer.
      *
-     * <p>This may be changed at any time, including while capture is active.
-     * The new rate takes effect on the next buffer update.
+     * <p>This may be changed at any time, even while capture is active.
+     * The new rate takes effect on the next audio update.
      *
-     * @param sampleRate samples per second, for example {@code 8000.0f} or
-     *                   {@code 44100.0f}
+     * @param sampleRate samples per second, for example {@code 8000.0f} or {@code 44100.0f}
      */
     public void setSampleRate(float sampleRate) {
         this.sampleRate = sampleRate;
     }
 
     /**
-     * Returns the names of all serial ports currently available on this
-     * system.
+     * Returns a list of USB serial ports currently detected on this computer.
      *
-     * <p>This method is intended for use by configuration dialogs (such as
-     * the Preferences panel) to populate a port-selection drop-down. The
-     * returned array may be empty if no ports are detected.
+     * <p>Use this list in Preferences to select which port your radio rig is connected to.
+     * The returned array may be empty if no ports are detected.
      *
      * @return an array of port name strings; never {@code null}
      */

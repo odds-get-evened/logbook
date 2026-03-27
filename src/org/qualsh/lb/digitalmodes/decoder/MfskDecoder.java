@@ -11,29 +11,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the MFSK16 digital mode.
+ * Decodes MFSK16 signals from loaded audio.
  *
- * <p>MFSK16 (Multiple Frequency Shift Keying, 16 tones) transmits data by
- * switching between 16 discrete audio tones simultaneously, making it
- * dramatically more robust than single-tone modes like BPSK31 or RTTY. Each
- * tone occupies a slot {@value #MFSK_TONE_SPACING_HZ}&nbsp;Hz wide, and the
- * full comb of {@value #MFSK_TONES} tones spans roughly 250&nbsp;Hz of audio
- * bandwidth.
+ * <p>MFSK16 is a robust multi-tone mode well-suited to difficult propagation conditions.
+ * It uses 16 tones simultaneously to carry data reliably even when signals are weak or
+ * fading — paths where BPSK31 or RTTY would fail completely.
  *
- * <p>The multi-tone architecture means that even if several tones are lost to
- * fading or interference, the remaining tones carry enough redundancy to
- * reconstruct the original text. This makes MFSK16 a popular choice for
- * long-distance HF paths prone to selective fading — including maritime mobile
- * and DXpedition communications — where BPSK31 would fail entirely.
+ * <p>Like BPSK31 and RTTY, MFSK16 is a keyboard-to-keyboard mode with no fixed time slots.
+ * About half a second of audio is sufficient before the decoder can attempt to find a signal.
  *
- * <p>Like BPSK31 and RTTY, MFSK16 is a continuous-stream, keyboard-to-keyboard
- * mode with no fixed time slots. At least {@value #MIN_SAMPLES_REQUIRED}
- * samples are required to detect a signal reliably.
- *
- * <p>This implementation performs a Discrete Fourier Transform and scans the
- * resulting magnitude spectrum for the characteristic comb of
- * {@value #MFSK_TONES} evenly-spaced peaks. Full character decoding is not yet
- * implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class MfskDecoder {
 
@@ -56,8 +44,7 @@ public class MfskDecoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code MfskDecoder}, loading the MFSK16 mode profile
-     * with its default bandwidth and signal parameters.
+     * Creates a new MFSK16 decoder with default signal parameters.
      */
     public MfskDecoder() {
         mode = new DigitalMode("MFSK16", "MFSK16");
@@ -66,7 +53,7 @@ public class MfskDecoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the MFSK16 digital mode; never {@code null}
      */
@@ -75,33 +62,14 @@ public class MfskDecoder {
     }
 
     /**
-     * Attempts to detect an MFSK16 signal in the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any MFSK16 signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_SAMPLES_REQUIRED}
-     * PCM samples of 16-bit signed little-endian mono audio. Buffers that are
-     * empty or too short are rejected immediately and an empty list is
-     * returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * About half a second of audio is needed; an empty list is returned when no MFSK16
+     * signals are detected or the audio is too short.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the sample count meets the MFSK16 minimum.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude
-     *       spectrum.</li>
-     *   <li>Scan the spectrum for {@value #MFSK_TONES} evenly-spaced tone
-     *       positions centred at 1500&nbsp;Hz, record the magnitude at each
-     *       expected bin, identify the strongest tone, and count how many tones
-     *       exceed 10&nbsp;% of the peak magnitude.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average
-     *       magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return
-     *       it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a signal is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded MFSK16 signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

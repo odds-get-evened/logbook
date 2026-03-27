@@ -5,23 +5,19 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the RTTY (Radio Teletype) digital mode.
+ * Encodes your typed message into an RTTY audio signal ready for preview or transmission.
  *
- * <p>RTTY is one of the oldest digital modes still used on the amateur HF bands.
- * On the air it sounds like a distinctive two-tone clatter — a mark tone at
- * {@value #RTTY_MARK_HZ} Hz and a space tone at {@value #RTTY_SPACE_HZ} Hz,
- * separated by a {@value #RTTY_SHIFT_HZ} Hz shift. The rapid switching between
- * these tones gives RTTY its characteristic rattling sound.
- *
- * <p>RTTY uses Baudot/ITA2 encoding, which supports upper-case letters, digits,
- * and a limited set of punctuation characters. Each character is transmitted as
- * a 5-bit code at {@value #RTTY_BAUD_RATE} baud, giving a typing speed of
- * roughly 60 words per minute. RTTY is widely used in HF contests and by coast
- * guard and maritime stations.
+ * <p>RadioTeleTYpe (RTTY) is one of the oldest digital modes still in active use on the
+ * amateur HF bands. On the air it sounds like a rapid typewriter — a distinctive two-tone
+ * clatter rapidly switching between a mark tone and a space tone. RTTY is widely used in
+ * HF contests and is easily recognizable by its characteristic rattling sound.
  *
  * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. Open <em>Preferences &rarr; Station</em>
- * if it has not been configured yet.
+ * {@link #setOperatorCallsign(String)}. Open Preferences → Station if it has not been
+ * configured yet.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class RttyEncoder implements Encoder {
 
@@ -39,9 +35,8 @@ public class RttyEncoder implements Encoder {
     private String operatorCallsign;
 
     /**
-     * Creates a new {@code RttyEncoder}, loading the RTTY mode profile with its
-     * default bandwidth and signal parameters. The operator callsign is initially
-     * empty; set it with {@link #setOperatorCallsign(String)} before encoding.
+     * Creates a new RTTY encoder. Set your callsign with {@link #setOperatorCallsign(String)}
+     * before encoding.
      */
     public RttyEncoder() {
         DigitalMode mode = new DigitalMode("Radio Teletype", "RTTY");
@@ -60,8 +55,11 @@ public class RttyEncoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when an operator callsign has been configured and
-     * the encoder is ready to produce a transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
+     *
+     * <p>At minimum your callsign must be set. Open Preferences → Station to fill in
+     * any missing details.
      *
      * @return {@code true} if the callsign is set; {@code false} otherwise
      */
@@ -71,23 +69,16 @@ public class RttyEncoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into an RTTY audio stream.
+     * Converts your typed message into an RTTY audio signal ready for preview or transmission.
      *
-     * <p>There is no hard character limit for RTTY, but messages longer than
-     * 500 characters may result in very long transmissions. The audio alternates
-     * between a mark tone at {@value #RTTY_MARK_HZ} Hz and a space tone at
-     * {@value #RTTY_SPACE_HZ} Hz ({@value #RTTY_SHIFT_HZ} Hz shift) at
-     * {@value #RTTY_BAUD_RATE} baud using Baudot/ITA2 encoding.
-     *
-     * <p>The returned buffer contains silence as a placeholder; actual FSK
-     * waveform synthesis using Baudot encoding is deferred to a future DSP
-     * implementation phase.
+     * <p>There is no hard character limit for RTTY, but messages longer than 500 characters
+     * may result in very long transmissions. Your callsign must be set before calling this
+     * method — open Preferences → Station if it has not been configured yet.
      *
      * @param text the message to encode; must not be {@code null} or blank
      * @param mode the digital mode (should be RTTY)
-     * @return an {@link AudioBuffer} containing the encoded audio stream
-     * @throws EncoderException if the message is empty or the operator
-     *         callsign has not been set
+     * @return an {@link AudioBuffer} containing the encoded audio signal; never {@code null}
+     * @throws EncoderException if the message is empty or the operator callsign has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

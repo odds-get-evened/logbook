@@ -12,31 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the Packet Radio digital mode.
+ * Decodes Packet Radio (AX.25) signals from loaded audio.
  *
- * <p>Packet radio uses the AX.25 link-layer protocol — the same protocol
- * that underpins APRS (Automatic Packet Reporting System) — to carry
- * structured data frames over the air. Every frame includes a header
- * containing the source and destination callsigns, optional digipeater
- * addresses, and a payload that can hold free-form text, position reports,
- * weather data, or other structured information.
+ * <p>Packet radio uses the AX.25 protocol to send structured data frames including operator
+ * callsigns. It is the foundation of APRS (Automatic Packet Reporting System), used worldwide
+ * for GPS position reporting, weather data, and short text messages, typically on 144.390 MHz
+ * in North America.
  *
- * <p>On VHF/UHF, the most common implementation uses Audio Frequency Shift
- * Keying (AFSK) at {@value #AX25_BAUD_RATE} baud. Two audio tones represent
- * the binary states: {@value #AFSK_MARK_HZ}&nbsp;Hz for mark (binary 1) and
- * {@value #AFSK_SPACE_HZ}&nbsp;Hz for space (binary 0). This tone pair fits
- * within the 3&nbsp;kHz passband of a standard FM voice radio, making packet
- * compatible with off-the-shelf handheld transceivers.
+ * <p>Packet signals sound like a brief burst of computer-modem tones. Only a fraction of
+ * a second of audio is needed before the decoder can attempt to find a signal.
  *
- * <p>1200-baud packet is widely used for APRS position reporting, messaging,
- * and telemetry, particularly from mobile stations and weather instruments.
- * At least {@value #MIN_SAMPLES_REQUIRED} samples are required to detect a
- * signal reliably.
- *
- * <p>This implementation applies separate Butterworth bandpass filters around
- * the mark and space tones, then compares their peak magnitudes to determine
- * which tone is currently dominant. Full AX.25 frame synchronisation, HDLC
- * decoding, and NRZI bit recovery are not yet implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class PacketDecoder {
 
@@ -66,8 +53,7 @@ public class PacketDecoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code PacketDecoder}, loading the Packet mode profile
-     * with its default bandwidth and signal parameters.
+     * Creates a new Packet Radio decoder with default signal parameters.
      */
     public PacketDecoder() {
         mode = new DigitalMode("Packet", "Packet");
@@ -76,45 +62,23 @@ public class PacketDecoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
-     * @return the Packet digital mode; never {@code null}
+     * @return the Packet Radio digital mode; never {@code null}
      */
     public DigitalMode getMode() {
         return mode;
     }
 
     /**
-     * Attempts to detect an AX.25 packet signal in the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any Packet Radio signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_SAMPLES_REQUIRED}
-     * PCM samples of 16-bit signed little-endian mono audio. Buffers that are
-     * empty or too short are rejected immediately and an empty list is
-     * returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * Only a fraction of a second of audio is needed; an empty list is returned when no
+     * packet signals are detected or the audio is too short.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the sample count meets the packet minimum.</li>
-     *   <li>Apply a 4th-order Butterworth bandpass filter centred at the
-     *       mark frequency ({@value #AFSK_MARK_HZ}&nbsp;Hz) with
-     *       {@value #TONE_FILTER_BW_HZ}&nbsp;Hz bandwidth, then perform a
-     *       Discrete Fourier Transform and record the peak magnitude.</li>
-     *   <li>Repeat step 3 for the space frequency
-     *       ({@value #AFSK_SPACE_HZ}&nbsp;Hz).</li>
-     *   <li>Compare the two peak magnitudes to determine whether mark or
-     *       space is currently dominant.</li>
-     *   <li>Estimate the signal-to-noise ratio from the stronger tone's peak
-     *       vs. the overall average magnitude of the full unfiltered
-     *       spectrum.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return
-     *       it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a signal is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded packet signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

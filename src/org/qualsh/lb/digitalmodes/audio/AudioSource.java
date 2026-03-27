@@ -1,41 +1,43 @@
 package org.qualsh.lb.digitalmodes.audio;
 
 /**
- * Represents a source of audio data that populates an {@link AudioBuffer}.
+ * Represents one of the ways audio can enter the Digital Modes application.
  *
- * <p>Implementations cover different origin types — WAV file import,
- * live microphone capture, rig audio input — each producing 16-bit
- * mono PCM data consumed by decoders and the spectrum display.
+ * <p>Implementations include loading a WAV file from your computer, recording
+ * audio from your computer's microphone input, and streaming live audio from
+ * a radio rig connected via a USB serial cable. Each implementation fills the
+ * shared audio buffer that drives the spectrum display and decoders.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public interface AudioSource {
 
     /**
-     * Starts the audio source, beginning the flow of audio data into the
-     * associated {@link AudioBuffer}.
+     * Starts the audio source so it begins supplying audio to the application.
      *
-     * <p>For file-based sources this may be a no-op; for live-input sources
-     * it opens the hardware line and begins capture.
+     * <p>For a rig connection this opens the serial port and begins streaming.
+     * For a file-based source this may have no effect — use the source's specific
+     * load method instead.
      */
     void start();
 
     /**
-     * Stops the audio source, ending the flow of audio data.
+     * Stops the audio source and releases any hardware connections it holds.
      *
-     * <p>Resources such as hardware lines should be released. After this
-     * call {@link #isActive()} must return {@code false}.
+     * <p>After this call, {@link #isActive()} returns {@code false}.
      */
     void stop();
 
     /**
-     * Returns {@code true} if the source is currently active and producing
-     * audio data.
+     * Returns {@code true} if this source is currently active and supplying audio.
      *
-     * @return {@code true} while the source is running
+     * @return {@code true} while audio is being supplied
      */
     boolean isActive();
 
     /**
-     * Returns the {@link AudioBuffer} that this source writes into.
+     * Returns the audio buffer that this source fills with incoming audio data.
      *
      * @return the buffer; never {@code null}
      */

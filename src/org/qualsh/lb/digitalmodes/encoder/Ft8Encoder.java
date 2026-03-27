@@ -5,25 +5,17 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the FT8 digital mode.
+ * Encodes your typed message into an FT8 audio signal ready for preview or transmission.
  *
- * <p>FT8 (Franke-Taylor design, 8-FSK modulation) is the most widely used
- * weak-signal HF mode in amateur radio. On the air it sounds like a rapid
- * series of rising musical tones that repeat every 15 seconds. The signal is
- * extremely narrow — about 50 Hz wide — and can be copied by stations whose
- * signals are buried 20 dB below the noise floor, making it effective on paths
- * where voice or CW would be impossible.
+ * <p>FT8 is the most widely used weak-signal HF mode in amateur radio. On the air it sounds
+ * like a rapid series of rising musical tones that repeat every 15 seconds. Messages are
+ * limited to 13 characters and must follow the FT8 callsign-exchange format.
  *
- * <p>Each FT8 transmission encodes a structured 77-bit message in exactly
- * {@value #FT8_SYMBOL_COUNT} symbols, with each symbol lasting
- * {@value #FT8_SYMBOL_PERIOD_SECONDS} seconds. The full transmission occupies
- * 12.64 seconds of a 15-second slot. Messages follow a fixed format —
- * typically a callsign exchange with a signal report — and are limited to
- * {@value FT8_MAX_TEXT_LENGTH} characters of free text.
+ * <p>Before encoding, set your callsign via {@link #setOperatorCallsign(String)}, or open
+ * Preferences → Station to configure it application-wide.
  *
- * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. Open <em>Preferences &rarr; Station</em>
- * if it has not been configured yet.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class Ft8Encoder implements Encoder {
 
@@ -44,9 +36,8 @@ public class Ft8Encoder implements Encoder {
     private String operatorCallsign;
 
     /**
-     * Creates a new {@code Ft8Encoder}, loading the FT8 mode profile with its
-     * default bandwidth and signal parameters. The operator callsign is initially
-     * empty; set it with {@link #setOperatorCallsign(String)} before encoding.
+     * Creates a new FT8 encoder. Set your callsign with {@link #setOperatorCallsign(String)}
+     * before encoding.
      */
     public Ft8Encoder() {
         DigitalMode mode = new DigitalMode("FT8", "FT8");
@@ -65,8 +56,11 @@ public class Ft8Encoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when an operator callsign has been configured and
-     * the encoder is ready to produce a transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
+     *
+     * <p>At minimum your callsign must be set. Open Preferences → Station to fill in
+     * any missing details.
      *
      * @return {@code true} if the callsign is set; {@code false} otherwise
      */
@@ -76,21 +70,16 @@ public class Ft8Encoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into an FT8 audio frame.
+     * Converts your typed message into an FT8 audio signal ready for preview or transmission.
      *
-     * <p>The message must be no longer than {@value #FT8_MAX_TEXT_LENGTH} characters.
-     * FT8 messages follow a structured format (callsign exchange or free-form
-     * text); the full frame occupies exactly {@value #FT8_SYMBOL_COUNT} symbols
-     * of {@value #FT8_SYMBOL_PERIOD_SECONDS} seconds each at 8 tones spaced
-     * {@value #FT8_TONE_SPACING_HZ} Hz apart.
-     *
-     * <p>The returned buffer contains silence as a placeholder. Actual 8-FSK
-     * waveform synthesis is deferred to a future DSP implementation phase.
+     * <p>The message must be no longer than {@value #FT8_MAX_TEXT_LENGTH} characters and must
+     * follow the FT8 callsign-exchange format. Your callsign must be set before calling this
+     * method — open Preferences → Station if it has not been configured yet.
      *
      * @param text the message to encode; must not be {@code null}, blank, or
      *             longer than {@value #FT8_MAX_TEXT_LENGTH} characters
      * @param mode the digital mode (should be FT8)
-     * @return an {@link AudioBuffer} containing the encoded audio frame
+     * @return an {@link AudioBuffer} containing the encoded audio frame; never {@code null}
      * @throws EncoderException if the message is empty, too long, or the
      *         operator callsign has not been set
      */

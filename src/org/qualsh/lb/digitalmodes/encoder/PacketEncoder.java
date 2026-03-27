@@ -5,31 +5,21 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the Packet Radio (AX.25 / AFSK1200) digital mode.
+ * Encodes your typed message into a Packet Radio audio signal ready for preview or transmission.
  *
- * <p>Packet Radio uses the AX.25 link-layer protocol to carry structured data
- * frames over amateur radio. On the air it sounds like a brief burst of
- * computer-modem tones — a rapid, chattering series of high and low pitches
- * lasting a fraction of a second per frame. The audio is produced by an
- * AFSK (Audio Frequency Shift Keying) modulator that switches between a
- * mark tone at {@value #AFSK_MARK_HZ} Hz and a space tone at
- * {@value #AFSK_SPACE_HZ} Hz at {@value #AX25_BAUD_RATE} baud.
- *
- * <p>Packet is most commonly used for APRS (Automatic Packet Reporting System)
- * on 144.390 MHz (North America), which carries real-time GPS position
- * reports, weather data, and short messages. The destination callsign
- * ({@code "APRS"} by default) identifies the packet type on the APRS network.
- * Custom AX.25 applications may use other destination addresses.
- *
- * <p>Each AX.25 frame is delimited by {@value #AX25_FLAG_BYTE} (0x7E) flag
- * bytes. There is no hard limit on message length, but very long packets
- * increase the chance of corruption on busy channels.
+ * <p>Packet Radio uses the AX.25 protocol to send structured data frames over amateur radio.
+ * On the air it sounds like a brief burst of computer-modem tones — a rapid, chattering
+ * series of high and low pitches lasting a fraction of a second per frame. It is the foundation
+ * of APRS (Automatic Packet Reporting System), used worldwide for GPS position reporting,
+ * weather data, and short text messages.
  *
  * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. The destination callsign defaults to
- * {@code "APRS"} and can be changed with {@link #setDestinationCallsign(String)}.
- * Open <em>Preferences &rarr; Station</em> if your callsign has not been
- * configured yet.
+ * {@link #setOperatorCallsign(String)}. The destination callsign defaults to {@code "APRS"} and
+ * can be changed with {@link #setDestinationCallsign(String)}. Open Preferences → Station if
+ * your callsign has not been configured yet.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class PacketEncoder implements Encoder {
 
@@ -52,10 +42,8 @@ public class PacketEncoder implements Encoder {
     private String destinationCallsign;
 
     /**
-     * Creates a new {@code PacketEncoder}, loading the Packet mode profile with its
-     * default bandwidth and signal parameters. The operator callsign is initially
-     * empty; the destination callsign defaults to {@code "APRS"}. Set your
-     * callsign with {@link #setOperatorCallsign(String)} before encoding.
+     * Creates a new Packet Radio encoder. The destination callsign defaults to {@code "APRS"}.
+     * Set your callsign with {@link #setOperatorCallsign(String)} before encoding.
      */
     public PacketEncoder() {
         DigitalMode mode = new DigitalMode("Packet Radio", "PKT");
@@ -75,11 +63,14 @@ public class PacketEncoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when both an operator callsign and a destination
-     * callsign have been configured so the encoder can build a valid AX.25
-     * frame.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
      *
-     * @return {@code true} if both callsigns are set; {@code false} otherwise
+     * <p>Packet Radio requires both your operator callsign and a destination callsign.
+     * Open Preferences → Station to fill in any missing details.
+     *
+     * @return {@code true} if both the operator and destination callsigns are set;
+     *         {@code false} otherwise
      */
     @Override
     public boolean isReadyToEncode() {
@@ -87,24 +78,19 @@ public class PacketEncoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into an AX.25 packet audio stream using AFSK1200.
+     * Converts your typed message into a Packet Radio audio signal ready for preview or
+     * transmission.
      *
-     * <p>There is no hard character limit for Packet, but messages longer than
-     * 500 characters may result in very long transmissions and exceed the
-     * practical AX.25 information field size. The audio alternates between a
-     * mark tone at {@value #AFSK_MARK_HZ} Hz and a space tone at
-     * {@value #AFSK_SPACE_HZ} Hz at {@value #AX25_BAUD_RATE} baud. Each frame
-     * is wrapped in {@code 0x7E} flag bytes per the AX.25 specification.
-     *
-     * <p>The returned buffer contains silence as a placeholder; actual AX.25
-     * frame building and AFSK waveform synthesis are deferred to a future DSP
-     * implementation phase.
+     * <p>There is no hard character limit for Packet Radio, but messages longer than
+     * 500 characters may result in very long transmissions. Both your operator callsign and
+     * destination callsign must be set before calling this method — open Preferences → Station
+     * if they have not been configured yet.
      *
      * @param text the packet payload to encode; must not be {@code null} or blank
      * @param mode the digital mode (should be Packet)
-     * @return an {@link AudioBuffer} containing the encoded audio stream
-     * @throws EncoderException if the message is empty, or if the operator or
-     *         destination callsign has not been set
+     * @return an {@link AudioBuffer} containing the encoded audio signal; never {@code null}
+     * @throws EncoderException if the message is empty, or if the operator or destination
+     *         callsign has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

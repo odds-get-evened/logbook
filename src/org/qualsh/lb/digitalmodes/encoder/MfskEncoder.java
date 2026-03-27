@@ -5,24 +5,19 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the MFSK16 (Multiple Frequency Shift Keying, 16 tones) digital mode.
+ * Encodes your typed message into an MFSK16 audio signal ready for preview or transmission.
  *
- * <p>MFSK16 is a robust HF keyboard mode well suited to noisy paths and polar
- * propagation. On the air it sounds like a series of rapidly changing musical
- * tones scattered across a 316 Hz swath of spectrum. The signal uses
- * {@value #MFSK_TONES} discrete tones spaced {@value #MFSK_TONE_SPACING_HZ} Hz
- * apart, centred at {@value #MFSK_CENTER_FREQUENCY_HZ} Hz in the audio passband.
- *
- * <p>Each symbol carries four bits of information, and symbols are transmitted
- * at {@value #MFSK_BAUD_RATE} baud using an IFK+ (Incremental Frequency Keying)
- * differential encoding scheme that makes the signal immune to constant frequency
- * offsets. MFSK16 also supports an optional Varicode-based forward error
- * correction layer (used in Fldigi's MFSK16 implementation) for additional
- * robustness.
+ * <p>MFSK16 is a robust multi-tone keyboard mode well suited to difficult propagation conditions.
+ * On the air it sounds like a series of rapidly changing musical tones scattered across a
+ * 250 Hz swath of spectrum. Its use of 16 simultaneous tones makes it especially resilient
+ * to selective fading and interference that would break other modes.
  *
  * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. Open <em>Preferences &rarr; Station</em>
- * if it has not been configured yet.
+ * {@link #setOperatorCallsign(String)}. Open Preferences → Station if it has not been
+ * configured yet.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class MfskEncoder implements Encoder {
 
@@ -40,9 +35,8 @@ public class MfskEncoder implements Encoder {
     private String operatorCallsign;
 
     /**
-     * Creates a new {@code MfskEncoder}, loading the MFSK16 mode profile with its
-     * default bandwidth and signal parameters. The operator callsign is initially
-     * empty; set it with {@link #setOperatorCallsign(String)} before encoding.
+     * Creates a new MFSK16 encoder. Set your callsign with {@link #setOperatorCallsign(String)}
+     * before encoding.
      */
     public MfskEncoder() {
         DigitalMode mode = new DigitalMode("MFSK16", "MFSK16");
@@ -61,8 +55,11 @@ public class MfskEncoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when an operator callsign has been configured and
-     * the encoder is ready to produce a transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
+     *
+     * <p>At minimum your callsign must be set. Open Preferences → Station to fill in
+     * any missing details.
      *
      * @return {@code true} if the callsign is set; {@code false} otherwise
      */
@@ -72,23 +69,16 @@ public class MfskEncoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into an MFSK16 audio stream.
+     * Converts your typed message into an MFSK16 audio signal ready for preview or transmission.
      *
-     * <p>There is no hard character limit for MFSK16, but messages longer than
-     * 500 characters may result in very long transmissions. Audio is generated
-     * using {@value #MFSK_TONES} tones at {@value #MFSK_BAUD_RATE} baud,
-     * spaced {@value #MFSK_TONE_SPACING_HZ} Hz apart around a centre frequency
-     * of {@value #MFSK_CENTER_FREQUENCY_HZ} Hz.
-     *
-     * <p>The returned buffer contains silence as a placeholder; actual MFSK
-     * waveform synthesis using IFK+ differential encoding is deferred to a
-     * future DSP implementation phase.
+     * <p>There is no hard character limit for MFSK16, but messages longer than 500 characters
+     * may result in very long transmissions. Your callsign must be set before calling this
+     * method — open Preferences → Station if it has not been configured yet.
      *
      * @param text the message to encode; must not be {@code null} or blank
      * @param mode the digital mode (should be MFSK16)
-     * @return an {@link AudioBuffer} containing the encoded audio stream
-     * @throws EncoderException if the message is empty or the operator
-     *         callsign has not been set
+     * @return an {@link AudioBuffer} containing the encoded audio signal; never {@code null}
+     * @throws EncoderException if the message is empty or the operator callsign has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

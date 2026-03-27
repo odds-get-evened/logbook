@@ -7,18 +7,16 @@ import javax.swing.*;
 import java.awt.*;
 
 /**
- * A compact selection panel that lets the operator choose which digital mode
- * the decoder and encoder should use.
+ * The mode selector drop-down panel at the top of the Digital Modes window.
  *
- * <p>The panel contains a labelled drop-down ({@link JComboBox}) pre-populated
- * with every supported digital mode, and a description label that updates
- * automatically to show the selected mode's key signal characteristics
- * (bandwidth, modulation family, and typical use case).
+ * <p>The panel contains a "Mode:" label and a drop-down list of every supported digital mode.
+ * A short description of the selected mode — including its typical bandwidth — is shown next
+ * to the drop-down. Register a {@link ModeChangeListener} with
+ * {@link #setModeChangeListener(ModeChangeListener)} to be notified whenever you pick a
+ * different mode.
  *
- * <p>Register a {@link ModeChangeListener} with
- * {@link #setModeChangeListener(ModeChangeListener)} to be notified whenever
- * the operator changes the selected mode. The listener fires on the Swing Event
- * Dispatch Thread.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class ModeSelectionPanel extends JPanel {
 
@@ -29,17 +27,17 @@ public class ModeSelectionPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Callback interface for components that need to react when the operator
-     * selects a different digital mode.
+     * Notified when you select a different digital mode from the drop-down.
+     *
+     * @author Logbook Development Team
+     * @version 1.0
      */
     public interface ModeChangeListener {
 
         /**
-         * Called on the Swing Event Dispatch Thread whenever the selected mode
-         * changes.
+         * Called whenever you select a different mode from the drop-down.
          *
-         * @param mode the newly selected {@link DigitalMode}; never
-         *             {@code null}
+         * @param mode the newly selected mode; never {@code null}
          */
         void onModeChanged(DigitalMode mode);
     }
@@ -72,12 +70,7 @@ public class ModeSelectionPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code ModeSelectionPanel} with FT8 selected by default.
-     *
-     * <p>The panel uses a {@link BorderLayout}: the mode label and combo box
-     * are placed in {@code WEST} and the description label occupies
-     * {@code CENTER}. The description label wraps text and has a maximum width
-     * of 200 pixels.
+     * Creates a new mode selection panel with FT8 selected by default.
      */
     public ModeSelectionPanel() {
         setLayout(new BorderLayout(8, 0));
@@ -166,10 +159,8 @@ public class ModeSelectionPanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Registers a listener to be notified whenever the operator selects a
-     * different digital mode.
-     *
-     * <p>Passing {@code null} removes any previously registered listener.
+     * Registers a listener to be notified when you pick a different digital mode. Pass
+     * {@code null} to remove any existing listener.
      *
      * @param listener the listener to register, or {@code null} to deregister
      */
@@ -178,24 +169,19 @@ public class ModeSelectionPanel extends JPanel {
     }
 
     /**
-     * Returns the digital mode currently selected in the combo box.
+     * Returns the digital mode currently selected in the drop-down.
      *
-     * @return the selected {@link DigitalMode}; never {@code null} as long as
-     *         the combo box is populated
+     * @return the selected mode; never {@code null} as long as at least one mode is available
      */
     public DigitalMode getSelectedMode() {
         return (DigitalMode) modeComboBox.getSelectedItem();
     }
 
     /**
-     * Programmatically selects a digital mode in the combo box.
-     *
-     * <p>The selection is matched by abbreviation so that equivalent
-     * {@link DigitalMode} instances that differ only in object identity can
-     * still be found. If no matching mode is present in the list this method
+     * Selects a digital mode in the drop-down. If the given mode is not available, this method
      * has no effect.
      *
-     * @param mode the {@link DigitalMode} to select; ignored if {@code null}
+     * @param mode the mode to select; ignored if {@code null}
      */
     public void setSelectedMode(DigitalMode mode) {
         if (mode == null) {

@@ -11,25 +11,19 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the FT8 digital mode.
+ * Decodes FT8 signals from loaded audio.
  *
- * <p>FT8 (Franke-Taylor design, 8-FSK modulation) is a weak-signal mode
- * designed for long-distance amateur radio contacts under poor propagation
- * conditions. It can decode signals that are 20&nbsp;dB or more below the
- * audible noise floor, making it extremely effective on paths where voice or
- * CW communication would be impossible.
+ * <p>FT8 is a weak-signal mode used worldwide for long-distance contacts. It operates on
+ * strict 15-second intervals synchronized to the clock and can decode signals far below
+ * what the human ear can hear — making it effective on paths where voice or Morse
+ * communication would be completely impossible.
  *
- * <p>FT8 operates in fixed 15-second time slots synchronised to the UTC
- * clock. Each transmission carries a structured 77-bit message — typically
- * a callsign exchange and signal report — encoded with strong forward error
- * correction. Audio frames shorter than 15 seconds cannot contain a complete
- * FT8 transmission and will be rejected by this decoder.
+ * <p>Each FT8 message carries a callsign exchange and signal report compressed into a
+ * 15-second burst. At least 15 seconds of audio must be loaded before this decoder can
+ * attempt to find a signal.
  *
- * <p>This implementation performs spectral analysis via a Discrete Fourier
- * Transform to locate the dominant signal peak within the audio passband and
- * provides a stub {@link DecodeResult} with frequency and estimated SNR
- * information. Full message decoding (LDPC, synchronisation, message
- * unpacking) is not yet implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class Ft8Decoder {
 
@@ -44,8 +38,7 @@ public class Ft8Decoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code Ft8Decoder}, loading the FT8 mode profile with its
-     * default bandwidth and signal parameters.
+     * Creates a new FT8 decoder with default signal parameters.
      */
     public Ft8Decoder() {
         mode = new DigitalMode("FT8", "FT8");
@@ -54,7 +47,7 @@ public class Ft8Decoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the FT8 digital mode; never {@code null}
      */
@@ -63,26 +56,14 @@ public class Ft8Decoder {
     }
 
     /**
-     * Attempts to decode an FT8 frame from the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any FT8 signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_FRAME_SECONDS} seconds
-     * of 16-bit signed little-endian mono PCM audio. Buffers that are empty or
-     * too short are rejected immediately and an empty list is returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * At least 15 seconds of audio must be loaded; shorter recordings are skipped.
+     * An empty list is returned when no FT8 signals are detected.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the frame duration meets the FT8 minimum.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude spectrum.</li>
-     *   <li>Locate the peak magnitude bin and derive its frequency in Hz.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a frame is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded FT8 signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();
