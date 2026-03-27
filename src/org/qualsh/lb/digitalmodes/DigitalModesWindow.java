@@ -245,8 +245,6 @@ public class DigitalModesWindow extends JDialog {
         sharedBuffer.addListener(buffer -> {
             decodeTextArea.appendText("--- Audio buffer updated ---\n");
             playbackController.stop();
-            fftPanel.setBuffer(sharedBuffer);
-            waterfallPanel.setBuffer(sharedBuffer);
         });
 
         // --- Frequency selector listener ---
