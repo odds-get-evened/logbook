@@ -17,11 +17,15 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+import javax.swing.JToolBar;
 import javax.swing.SwingUtilities;
+
+import org.qualsh.lb.digitalmodes.DigitalModesWindow;
 
 import org.qualsh.lb.data.Data;
 import org.qualsh.lb.data.LogsModel;
@@ -43,6 +47,7 @@ public class MainWin extends JFrame {
 	private LogsPanel logsPanel;
 	private LogMenuBar logMenuBar;
 	private MapPanel mapPanel;
+	private DigitalModesWindow digitalModesWindow;
 
 	public MainWin() throws HeadlessException {
 		setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
@@ -129,6 +134,19 @@ public class MainWin extends JFrame {
 		// Make logsModel available to the Digital Modes window for auto-logging
 		this.getLogMenuBar().setLogsModel(logsModel);
 
+		// Pass a MainWin reference to the menu bar so it can wire the Digital
+		// Modes menu item's action listener.
+		this.getLogMenuBar().setMainWin(this);
+
+		// Toolbar with Digital Modes launcher
+		JToolBar toolBar = new JToolBar();
+		toolBar.setFloatable(false);
+		JButton digitalModesButton = new JButton("Digital Modes");
+		digitalModesButton.setToolTipText("Open Digital Modes decoder/encoder (Ctrl+D)");
+		digitalModesButton.addActionListener(e -> openDigitalModesWindow());
+		toolBar.add(digitalModesButton);
+		this.getContentPane().add(toolBar, BorderLayout.NORTH);
+
 		// Load all locations/places from DB for the "All Stations" layer
 		ViewLocationsModel allLocModel = new ViewLocationsModel();
 		allLocModel.setAllLocations();
@@ -146,19 +164,24 @@ public class MainWin extends JFrame {
 		KeyboardFocusManager.getCurrentKeyboardFocusManager().addKeyEventDispatcher(new KeyEventDispatcher() {
 
 			public boolean dispatchKeyEvent(KeyEvent e) {
-				
+
 				// quit application
 				if(e.getKeyCode() == KeyEvent.VK_Q && e.getModifiers() == InputEvent.CTRL_MASK) {
 					MainWin.this.exit(MainWin.this);
 				}
-				
+
 				// open up new station dialog
 				if(e.getKeyCode() == KeyEvent.VK_S && e.getModifiers() == InputEvent.CTRL_MASK) {
 					NewStationDialog stationDialog = new NewStationDialog(MainWin.this);
 					stationDialog.setLogInteraction(MainWin.this.getLogInteraction());
 					stationDialog.setVisible(true);
 				}
-				
+
+				// open digital modes window
+				if (e.getKeyCode() == KeyEvent.VK_D && e.getModifiers() == InputEvent.CTRL_MASK) {
+					MainWin.this.openDigitalModesWindow();
+				}
+
 				return false;
 			}
 			
@@ -244,6 +267,26 @@ public class MainWin extends JFrame {
 
 	public void setMapPanel(MapPanel mapPanel) {
 		this.mapPanel = mapPanel;
+	}
+
+	/**
+	 * Opens the Digital Modes decoder and encoder window.
+	 *
+	 * <p>The window is created lazily the first time this method is called and
+	 * then reused on subsequent calls so that all decoder state, scroll
+	 * positions, and loaded audio are preserved between sessions. The window is
+	 * non-modal, so the operator can continue using the main logbook while
+	 * decoding or encoding digital signals.
+	 *
+	 * <p>This method can be invoked via the <em>Tools &rarr; Digital Modes</em>
+	 * menu item, the toolbar button, or the keyboard shortcut
+	 * <kbd>Ctrl+D</kbd>.
+	 */
+	public void openDigitalModesWindow() {
+		if (digitalModesWindow == null) {
+			digitalModesWindow = new DigitalModesWindow(this);
+		}
+		digitalModesWindow.openWindow();
 	}
 
 	public void exit(JFrame jframe) {
