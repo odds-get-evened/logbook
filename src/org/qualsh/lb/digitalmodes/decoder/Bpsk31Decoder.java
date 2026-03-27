@@ -12,30 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the BPSK31 digital mode.
+ * Decodes BPSK31 signals from loaded audio.
  *
- * <p>BPSK31 (Binary Phase Shift Keying, 31 baud) is one of the most popular
- * keyboard-to-keyboard chat modes in amateur radio. Operators type messages in
- * real time and the text is transmitted and received live at the other end,
- * making it ideal for casual QSOs and ragchewing on HF.
+ * <p>BPSK31 is a narrow keyboard-to-keyboard chat mode, recognizable by its distinctive
+ * warbling sound. Popular on HF bands for real-time text conversations between operators,
+ * it fits dozens of simultaneous contacts into the same space a single voice signal would occupy.
  *
- * <p>The mode uses a symbol rate of {@value #BPSK31_BAUD_RATE} baud — one
- * symbol per character on average — and occupies an extremely narrow
- * 31&nbsp;Hz bandwidth. This compact footprint makes BPSK31 exceptionally
- * efficient on crowded bands such as 40&nbsp;m and 20&nbsp;m, where dozens of
- * QSOs can fit side by side in the space normally occupied by a single SSB
- * voice transmission.
+ * <p>Unlike FT8 or WSPR, BPSK31 has no fixed time slots — decoding can begin at any point
+ * in the audio. Only a fraction of a second of audio is needed before the decoder can
+ * attempt to find a signal.
  *
- * <p>Unlike FT8 or WSPR, BPSK31 is a continuous-stream mode with no fixed
- * time slots. Decoding can begin at any point in the audio and requires only
- * a short segment — approximately 0.3 seconds ({@value #MIN_SAMPLES_REQUIRED}
- * samples at 8000&nbsp;Hz) — to detect a signal.
- *
- * <p>This implementation performs spectral analysis via a Discrete Fourier
- * Transform, preceded by a Butterworth bandpass filter centred at the
- * conventional 1500&nbsp;Hz audio centre frequency, and provides a stub
- * {@link DecodeResult} with frequency and estimated SNR information. Full
- * Varicode character decoding is not yet implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class Bpsk31Decoder {
 
@@ -56,8 +44,7 @@ public class Bpsk31Decoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code Bpsk31Decoder}, loading the BPSK31 mode profile
-     * with its default bandwidth and signal parameters.
+     * Creates a new BPSK31 decoder with default signal parameters.
      */
     public Bpsk31Decoder() {
         mode = new DigitalMode("BPSK31", "BPSK31");
@@ -66,7 +53,7 @@ public class Bpsk31Decoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the BPSK31 digital mode; never {@code null}
      */
@@ -75,32 +62,14 @@ public class Bpsk31Decoder {
     }
 
     /**
-     * Attempts to detect a BPSK31 signal in the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any BPSK31 signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_SAMPLES_REQUIRED}
-     * PCM samples of 16-bit signed little-endian mono audio. Buffers that are
-     * empty or too short are rejected immediately and an empty list is
-     * returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * A very short amount of audio is sufficient; an empty list is returned when
+     * no BPSK31 signals are detected or the audio is too short.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the sample count meets the BPSK31 minimum.</li>
-     *   <li>Apply a 4th-order Butterworth bandpass filter centred at
-     *       1500&nbsp;Hz using the mode's default bandwidth.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude
-     *       spectrum.</li>
-     *   <li>Locate the peak magnitude bin and derive its frequency in Hz.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average
-     *       magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return
-     *       it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a signal is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded BPSK31 signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

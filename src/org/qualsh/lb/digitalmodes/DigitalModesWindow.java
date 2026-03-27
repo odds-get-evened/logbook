@@ -32,28 +32,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The top-level Digital Modes window for the Logbook application.
+ * The Digital Modes window where you decode and encode amateur-radio digital signals.
  *
- * <p>{@code DigitalModesWindow} is a non-modal {@link JDialog} that lets
- * the operator decode and encode amateur-radio digital signals while
- * continuing to use the main logbook. It assembles every sub-panel —
- * FFT spectrum, waterfall, frequency selector, mode selector, audio controls,
- * decode log, and encode composer — into a single cohesive interface.
+ * <p>Open this window from the main Logbook menu. It contains a live frequency spectrum and
+ * waterfall display, a mode selector, audio transport controls, a scrolling decode output
+ * area, a decode history log, and a message compose panel. You can continue using the main
+ * logbook while this window is open — it runs independently.
  *
- * <p>Typical usage from the main application window:
- * <pre>
- *   DigitalModesWindow dmw = new DigitalModesWindow(mainFrame);
- *   dmw.openWindow();
- * </pre>
+ * <p>Call {@link #openWindow()} to show the window and {@link #closeWindow()} to hide it and
+ * stop all background decoding. Connect a radio rig via {@link #setRigAudioSource(RigAudioSource)}
+ * to stream live audio directly into the decoder.
  *
- * <p>The window hides rather than disposes itself when the user closes it,
- * preserving all decoder state and scroll positions between sessions. Call
- * {@link #closeWindow()} explicitly to release resources when the application
- * exits.
- *
- * <p>An optional rig audio source can be supplied via
- * {@link #setRigAudioSource(RigAudioSource)} to feed live radio audio
- * directly into the shared audio buffer.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class DigitalModesWindow extends JDialog {
 
@@ -101,14 +92,10 @@ public class DigitalModesWindow extends JDialog {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code DigitalModesWindow} attached to the given parent
-     * frame.
+     * Creates a new Digital Modes window attached to the given parent frame.
      *
-     * <p>The window is sized to 75% of the screen width and 85% of the screen
-     * height and centred relative to the parent. It is non-modal so the
-     * operator can continue using the main logbook while decoding. All
-     * sub-components are initialised immediately; call {@link #openWindow()}
-     * to make the window visible.
+     * <p>The window is sized to fit the screen and centred on it. Call {@link #openWindow()}
+     * to make it visible.
      *
      * @param parent the owner frame; must not be {@code null}
      */
@@ -502,13 +489,11 @@ public class DigitalModesWindow extends JDialog {
     // -------------------------------------------------------------------------
 
     /**
-     * Connects a rig audio source to the shared buffer.
+     * Connects a radio rig audio source so that live rig audio feeds into the decoder and
+     * spectrum display.
      *
-     * <p>When the rig source's buffer is updated (for example, as serial audio
-     * data streams in), the shared buffer is automatically refreshed so that
-     * the decoders and spectrum displays see the live rig audio. The rig source
-     * is not started by this method; call {@link RigAudioSource#start()} on
-     * the source directly when you are ready to begin capture.
+     * <p>The rig source is not started automatically — call {@link RigAudioSource#start()} on
+     * it when you are ready to begin receiving audio.
      *
      * @param source the rig audio source to connect; must not be {@code null}
      */
@@ -519,11 +504,10 @@ public class DigitalModesWindow extends JDialog {
     }
 
     /**
-     * Makes the Digital Modes window visible and requests keyboard focus.
+     * Makes the Digital Modes window visible and starts a new session.
      *
-     * <p>A {@code "--- Digital Modes Ready ---"} banner is appended to the
-     * decode text area each time the window is opened so the operator can
-     * easily see when a new session begins.
+     * <p>A "Digital Modes Ready" banner appears in the decode output area each time the window
+     * opens so you can easily see when a new session begins.
      */
     public void openWindow() {
         setVisible(true);
@@ -532,16 +516,10 @@ public class DigitalModesWindow extends JDialog {
     }
 
     /**
-     * Hides the Digital Modes window and stops all background activity.
+     * Hides the Digital Modes window and stops all background decoding and playback.
      *
-     * <p>Specifically:
-     * <ol>
-     *   <li>The periodic decode timer is stopped.</li>
-     *   <li>Audio playback is halted via {@link PlaybackController#stop()}.</li>
-     *   <li>The rig audio source is stopped if one is configured and active.</li>
-     *   <li>The window is hidden (not disposed) so its state is preserved for
-     *       the next {@link #openWindow()} call.</li>
-     * </ol>
+     * <p>The window is hidden rather than closed, so all decode history and settings are
+     * preserved for the next time you call {@link #openWindow()}.
      */
     public void closeWindow() {
         if (decodeTimer != null) {

@@ -10,21 +10,15 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
 /**
- * A read-only text area that displays real-time decoded text as it arrives
- * from any active decoder.
+ * The scrolling decode output area that shows decoded signals as they arrive.
  *
- * <p>Text is rendered in a green-on-black terminal style using a monospaced
- * font. Each decoded result is appended as a single formatted line and the
- * view automatically scrolls to the bottom so the most recent output is
- * always visible.
+ * <p>Decoded messages appear in green-on-black terminal style, one per line, with the newest
+ * at the bottom. The display automatically scrolls to keep the latest decode in view. To keep
+ * memory usage sensible during long sessions, only the most recent {@value #MAX_LINES} lines
+ * are kept; older lines are quietly removed from the top.
  *
- * <p>To prevent unbounded memory growth during long decode sessions the area
- * retains at most {@value #MAX_LINES} lines; older lines are silently removed
- * from the top when the limit is exceeded.
- *
- * <p>All mutations to the underlying document are dispatched on the Swing
- * Event Dispatch Thread, making it safe to call the public methods from any
- * thread.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class DecodeTextArea extends JTextArea {
 
@@ -47,8 +41,7 @@ public class DecodeTextArea extends JTextArea {
             DateTimeFormatter.ofPattern("HH:mm:ss");
 
     /**
-     * Creates a new {@code DecodeTextArea} with terminal-style appearance.
-     * The area is read-only; users cannot type into it.
+     * Creates a new decode output area with terminal-style appearance. The area is read-only.
      */
     public DecodeTextArea() {
         super();
@@ -63,20 +56,11 @@ public class DecodeTextArea extends JTextArea {
     }
 
     /**
-     * Formats a {@link DecodeResult} and appends it as a single line to the
-     * display.
+     * Adds a decoded signal to the output area.
      *
-     * <p>The line is written in the form:
-     * <pre>[HH:mm:ss] [MODE-id] freq Hz | decoded text</pre>
-     * where the time is derived from the result's Unix timestamp, the mode
-     * identifier is the numeric digital-mode ID stored in the result, the
-     * frequency is the audio offset in hertz formatted to one decimal place,
-     * and the text is the decoded message.
-     *
-     * <p>After appending, the oldest lines are trimmed if the total exceeds
-     * {@value #MAX_LINES}, and the view scrolls to show the newest entry.
-     *
-     * <p>This method is safe to call from any thread.
+     * <p>The result is formatted as a single line showing the time, mode, frequency, and decoded
+     * text, then appended at the bottom of the display. The view scrolls automatically to show
+     * the new entry.
      *
      * @param result the decoded result to display; must not be {@code null}
      */
@@ -97,13 +81,9 @@ public class DecodeTextArea extends JTextArea {
     }
 
     /**
-     * Appends a raw string directly to the display without any formatting.
+     * Appends a plain status message to the display, such as {@code "--- File loaded ---"}.
      *
-     * <p>Use this for status messages such as {@code "--- Listening ---"} or
-     * {@code "--- File loaded ---"} that are not associated with a specific
-     * decode result.
-     *
-     * <p>This method is safe to call from any thread.
+     * <p>Use this for informational text that is not a decoded signal result.
      *
      * @param text the string to append; must not be {@code null}
      */
@@ -115,9 +95,7 @@ public class DecodeTextArea extends JTextArea {
     }
 
     /**
-     * Removes all text from the display.
-     *
-     * <p>This method is safe to call from any thread.
+     * Clears all text from the decode output area.
      */
     public void clearDisplay() {
         SwingUtilities.invokeLater(() -> setText(""));

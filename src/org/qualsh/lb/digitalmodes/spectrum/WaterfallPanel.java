@@ -9,29 +9,18 @@ import java.awt.*;
 import java.awt.image.BufferedImage;
 
 /**
- * A scrolling waterfall display panel for the Digital Modes feature.
+ * Displays a scrolling waterfall view of the loaded audio.
  *
- * <p>{@code WaterfallPanel} renders a two-dimensional heat-map image where the
- * X axis represents frequency, the Y axis represents time (newest row at the
- * top, older rows scrolling downward), and the colour of each pixel encodes
- * signal strength using a graduated heat-colour scale ranging from black
- * (no signal) through dark blue, cyan, and yellow to white (peak signal).
+ * <p>The waterfall shows frequency on the horizontal axis and time on the vertical axis, with
+ * the newest row always at the top and older rows scrolling downward. Pixel colour encodes
+ * signal strength, ranging from black (no signal) through dark blue and cyan to yellow and
+ * white (strongest signal). The display updates approximately 10 times per second.
  *
- * <p>The panel reads audio data from a connected {@link AudioBuffer},
- * recomputes an FFT magnitude spectrum on every refresh tick (approximately
- * 10 Hz), and scrolls the waterfall image down by one pixel before painting
- * the freshly computed row at the top. The image is automatically resized to
- * match the panel dimensions whenever the panel is laid out.
+ * <p>Connect the panel to the application's audio using {@link #setBuffer(AudioBuffer)}.
+ * The waterfall will automatically scroll and update whenever the audio changes.
  *
- * <p>Typical usage:
- * <pre>
- *   WaterfallPanel waterfall = new WaterfallPanel();
- *   waterfall.setBuffer(myAudioBuffer);
- *   parentPanel.add(waterfall);
- * </pre>
- *
- * <p>When no buffer is connected, or the buffer is empty, the waterfall image
- * retains its last painted content and no new rows are added.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class WaterfallPanel extends JPanel implements AudioBufferListener {
 
@@ -49,12 +38,8 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code WaterfallPanel} with a preferred size of
-     * 800 × 200 pixels.
-     *
-     * <p>A blank black waterfall image is allocated immediately and a refresh
-     * timer is started so that the display begins scrolling as soon as a
-     * buffer is connected via {@link #setBuffer(AudioBuffer)}.
+     * Creates a new waterfall display panel. Call {@link #setBuffer(AudioBuffer)} to connect
+     * audio data so the waterfall has something to show.
      */
     public WaterfallPanel() {
         setPreferredSize(new Dimension(800, PREFERRED_HEIGHT));
@@ -72,16 +57,12 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Connects this panel to the given {@link AudioBuffer}.
+     * Connects this waterfall display to the given audio buffer.
      *
-     * <p>Any previously connected buffer is unsubscribed first. This panel
-     * registers itself as an {@link AudioBufferListener} on the new buffer so
-     * it is notified whenever audio data changes. Passing {@code null}
-     * disconnects the panel from any buffer, causing the waterfall to stop
-     * updating.
+     * <p>The waterfall immediately begins scrolling new rows based on audio from the new buffer.
+     * Passing {@code null} disconnects the display and stops the waterfall from updating.
      *
-     * @param buffer the audio buffer to visualise, or {@code null} to
-     *               disconnect
+     * @param buffer the audio buffer to display, or {@code null} to disconnect
      */
     public void setBuffer(AudioBuffer buffer) {
         if (this.buffer != null) {
@@ -94,12 +75,10 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Called automatically when the connected {@link AudioBuffer} is loaded or
-     * cleared.
+     * Called automatically when the connected audio buffer is loaded or cleared.
      *
-     * <p>This notification arrives whenever new audio data is available. The
-     * refresh timer will incorporate the updated data at its next tick and
-     * schedule a repaint on the Event Dispatch Thread.
+     * <p>The waterfall picks up the new audio on the next refresh tick. You do not need to
+     * call this method directly.
      *
      * @param buffer the buffer whose content changed; never {@code null}
      */
@@ -110,18 +89,11 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Scrolls the waterfall image down by one pixel and paints a new top row
-     * derived from the current FFT magnitude spectrum.
+     * Scrolls the waterfall image down and adds a new row at the top based on the current
+     * audio spectrum.
      *
-     * <p>If no buffer is connected, or the buffer is empty, this method
-     * returns immediately without modifying the waterfall image.
-     *
-     * <p>The FFT computation follows the same PCM-to-double conversion used by
-     * {@link FFTPanel}: raw 16-bit signed little-endian PCM bytes are
-     * normalised to the range −1.0 to 1.0, zero-padded to the next power of
-     * two, and transformed via {@link DiscreteFourier}. The resulting magnitude
-     * bins are then mapped to pixel colours using
-     * {@link #magnitudeToColor(double)} and written into the image's top row.
+     * <p>This method is called automatically on each refresh tick. If no audio is loaded,
+     * it returns immediately without modifying the waterfall image.
      */
     public void scrollAndUpdate() {
         if (buffer == null || buffer.isEmpty()) {
@@ -191,11 +163,11 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Paints the waterfall image scaled to fill the panel, then draws a small
-     * "Waterfall" label in the top-left corner.
+     * Draws the waterfall image on screen.
      *
-     * @param g the {@code Graphics} context provided by Swing; must not be
-     *          {@code null}
+     * <p>This method is called automatically by the display framework.
+     *
+     * @param g the graphics context provided by the display framework; must not be {@code null}
      */
     @Override
     protected void paintComponent(Graphics g) {
@@ -217,16 +189,11 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Resizes the internal waterfall image to the specified dimensions,
-     * copying as much of the existing image content as fits into the new
-     * image.
+     * Resizes the waterfall image to the specified dimensions, preserving as much existing
+     * history as fits. Called automatically when the panel is resized.
      *
-     * <p>This method is called automatically from the {@link #setBounds}
-     * override whenever the panel is resized so that the waterfall history is
-     * preserved across layout changes.
-     *
-     * @param width  the new image width in pixels; must be greater than zero
-     * @param height the new image height in pixels; must be greater than zero
+     * @param width  the new image width in pixels; must be greater than {@code 0}
+     * @param height the new image height in pixels; must be greater than {@code 0}
      */
     public void resizeImage(int width, int height) {
         if (width <= 0 || height <= 0) {
@@ -240,11 +207,10 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     }
 
     /**
-     * Sets the bounds of this panel and resizes the waterfall image to match
-     * the new panel dimensions.
+     * Sets the position and size of this panel, resizing the waterfall image to match.
      *
-     * @param x      the new X coordinate of the panel's top-left corner
-     * @param y      the new Y coordinate of the panel's top-left corner
+     * @param x      the X coordinate of the panel's top-left corner
+     * @param y      the Y coordinate of the panel's top-left corner
      * @param width  the new width of the panel in pixels
      * @param height the new height of the panel in pixels
      */
@@ -259,7 +225,7 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     /**
      * Returns the preferred display size of this panel.
      *
-     * @return a {@link Dimension} of 800 × 200 pixels
+     * @return a {@link Dimension} of 800 × 200 pixels; never {@code null}
      */
     @Override
     public Dimension getPreferredSize() {

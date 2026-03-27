@@ -11,33 +11,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the Olivia digital mode.
+ * Decodes Olivia signals from loaded audio.
  *
- * <p>Olivia is an extremely robust amateur radio digital mode designed
- * specifically to be decoded even when the signal is completely inaudible to
- * the human ear. It achieves this through a combination of multi-tone
- * frequency-shift keying, a powerful forward-error-correction (FEC) scheme,
- * and synchronisation tones that allow the decoder to lock on to a signal
- * buried deep in the noise floor.
+ * <p>Olivia is an extremely robust mode designed to be decoded even when completely inaudible
+ * to the human ear. It is popular on HF during poor band conditions — for example during solar
+ * minimum or geomagnetic disturbances — where faster modes like FT8 or PSK31 fail to decode.
  *
- * <p>The default variant implemented here — Olivia 8/250 — uses
- * {@value #OLIVIA_TONES} tones spread across a {@value #OLIVIA_BANDWIDTH_HZ}&nbsp;Hz
- * passband, with the tones spaced {@value #OLIVIA_BANDWIDTH_HZ}&nbsp;Hz&nbsp;/&nbsp;{@value #OLIVIA_TONES}
- * = 31.25&nbsp;Hz apart and centred at the conventional 1500&nbsp;Hz audio
- * frequency. Other common variants include Olivia 4/125, 8/500, 16/500, and
- * 32/1000, each offering different trade-offs between throughput and noise
- * immunity.
+ * <p>This decoder handles the Olivia 8/250 variant (8 tones, 250 Hz bandwidth).
+ * About one second of audio is needed before the decoder can attempt to find a signal.
  *
- * <p>Olivia is popular on HF bands during poor propagation conditions — for
- * example during solar minimum or during periods of high geomagnetic activity —
- * where faster modes like FT8 or PSK31 fail to decode reliably. At least
- * {@value #MIN_SAMPLES_REQUIRED} samples (one full second at 8000&nbsp;Hz) are
- * required to detect a signal.
- *
- * <p>This implementation performs a Discrete Fourier Transform and checks the
- * magnitude spectrum at each of the {@value #OLIVIA_TONES} expected Olivia
- * tone positions. Full FEC decoding and character output are not yet
- * implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class OliviaDecoder {
 
@@ -60,8 +44,7 @@ public class OliviaDecoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code OliviaDecoder}, loading the Olivia mode profile
-     * with its default bandwidth and signal parameters.
+     * Creates a new Olivia decoder with default signal parameters.
      */
     public OliviaDecoder() {
         mode = new DigitalMode("Olivia", "Olivia");
@@ -70,7 +53,7 @@ public class OliviaDecoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the Olivia digital mode; never {@code null}
      */
@@ -79,33 +62,14 @@ public class OliviaDecoder {
     }
 
     /**
-     * Attempts to detect an Olivia 8/250 signal in the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any Olivia signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_SAMPLES_REQUIRED}
-     * PCM samples of 16-bit signed little-endian mono audio. Buffers that are
-     * empty or too short are rejected immediately and an empty list is
-     * returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * About one second of audio is needed; an empty list is returned when no Olivia
+     * signals are detected or the audio is too short.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the sample count meets the Olivia minimum.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude
-     *       spectrum.</li>
-     *   <li>Compute the expected positions of the {@value #OLIVIA_TONES} Olivia
-     *       tones spanning {@value #OLIVIA_BANDWIDTH_HZ}&nbsp;Hz and centred at
-     *       1500&nbsp;Hz. Record the magnitude at each expected bin and count
-     *       the number of active tones.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average
-     *       magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return
-     *       it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a signal is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded Olivia signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

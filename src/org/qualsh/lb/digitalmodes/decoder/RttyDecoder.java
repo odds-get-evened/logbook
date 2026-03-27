@@ -12,32 +12,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decoder stub for the RTTY digital mode.
+ * Decodes RTTY signals from loaded audio.
  *
- * <p>RTTY (RadioTeleTYpe) is one of the oldest digital modes still in active
- * use on the amateur radio bands. Originally driven by electromechanical
- * teleprinters, modern RTTY is generated and decoded entirely in software
- * using a computer's sound card.
+ * <p>RadioTeleTYpe (RTTY) is one of the oldest digital modes still in active use.
+ * It sounds like a rapid typewriter — two alternating tones switching rapidly to
+ * carry text. RTTY is commonly used in HF contests and by some maritime and
+ * government stations.
  *
- * <p>RTTY encodes characters using two audio tones called <em>mark</em> and
- * <em>space</em>, separated by a fixed frequency shift. The most common
- * amateur shift is {@value #RTTY_SHIFT_HZ}&nbsp;Hz, so the two tones sit
- * {@value #RTTY_SHIFT_HZ}&nbsp;Hz apart within the audio passband. Characters
- * are represented using the ITA2 (Baudot) alphabet at a typical rate of
- * 45.45 baud.
+ * <p>RTTY has no fixed time slots — decoding can begin at any point in the audio.
+ * About one second of audio is sufficient before the decoder can attempt to find a signal.
  *
- * <p>RTTY remains popular in HF contests (notably CQWW RTTY and ARRL RTTY
- * Roundup) and was historically used by news wire services to distribute
- * press copy worldwide. Like BPSK31, RTTY is a continuous-stream mode with
- * no fixed time slots; decoding can begin at any point in the audio. At least
- * {@value #MIN_SAMPLES_REQUIRED} samples (one full second at 8000&nbsp;Hz) are
- * required to detect a signal reliably.
- *
- * <p>This implementation applies a 4th-order Butterworth bandpass filter
- * centred at the conventional 1500&nbsp;Hz audio centre frequency, then
- * performs spectral analysis via a Discrete Fourier Transform to locate the
- * dominant tone. Full FSK demodulation and ITA2 character decoding are not
- * yet implemented.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class RttyDecoder {
 
@@ -57,8 +43,7 @@ public class RttyDecoder {
     private List<DecodeResult> results;
 
     /**
-     * Creates a new {@code RttyDecoder}, loading the RTTY mode profile with
-     * its default bandwidth and signal parameters.
+     * Creates a new RTTY decoder with default signal parameters.
      */
     public RttyDecoder() {
         mode = new DigitalMode("RTTY", "RTTY");
@@ -67,7 +52,7 @@ public class RttyDecoder {
     }
 
     /**
-     * Returns the {@link DigitalMode} that this decoder handles.
+     * Returns the digital mode handled by this decoder.
      *
      * @return the RTTY digital mode; never {@code null}
      */
@@ -76,32 +61,14 @@ public class RttyDecoder {
     }
 
     /**
-     * Attempts to detect an RTTY signal in the supplied audio buffer.
+     * Analyzes the loaded audio and attempts to find and decode any RTTY signals present.
      *
-     * <p>The buffer must contain at least {@value #MIN_SAMPLES_REQUIRED}
-     * PCM samples of 16-bit signed little-endian mono audio. Buffers that are
-     * empty or too short are rejected immediately and an empty list is
-     * returned.
+     * <p>Results appear in the decode output area and are added to the decode log.
+     * About one second of audio is needed; an empty list is returned when no RTTY
+     * signals are detected or the audio is too short.
      *
-     * <p>Processing steps:
-     * <ol>
-     *   <li>Convert raw PCM bytes to a normalised {@code double[]} signal.</li>
-     *   <li>Verify the sample count meets the RTTY minimum.</li>
-     *   <li>Apply a 4th-order Butterworth bandpass filter centred at
-     *       1500&nbsp;Hz using the mode's default bandwidth.</li>
-     *   <li>Run a Discrete Fourier Transform and retrieve the magnitude
-     *       spectrum.</li>
-     *   <li>Locate the peak magnitude bin and derive its frequency in Hz.</li>
-     *   <li>Estimate the signal-to-noise ratio from the peak vs. average
-     *       magnitude.</li>
-     *   <li>Package the findings into a {@link DecodeResult} and return
-     *       it.</li>
-     * </ol>
-     *
-     * @param buffer the audio buffer to analyse; must not be {@code null}
-     * @return a list containing one {@link DecodeResult} when a signal is
-     *         detected, or an empty list when the buffer is too short, empty,
-     *         or an error occurs during processing
+     * @param buffer the audio to analyze; must not be {@code null}
+     * @return a list of decoded RTTY signals, possibly empty; never {@code null}
      */
     public List<DecodeResult> decode(AudioBuffer buffer) {
         results.clear();

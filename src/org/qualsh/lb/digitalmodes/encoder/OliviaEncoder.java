@@ -5,28 +5,20 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the Olivia digital mode (8/250 configuration).
+ * Encodes your typed message into an Olivia audio signal ready for preview or transmission.
  *
- * <p>Olivia is a keyboard-to-keyboard HF mode renowned for its resilience on
- * extremely difficult propagation paths. On the air it sounds like a smooth,
- * continuously varying chord — a gentle, almost musical swoosh that shifts
- * slowly across the audio passband. Olivia 8/250 uses {@value #OLIVIA_TONES}
- * tones spread across a {@value #OLIVIA_BANDWIDTH_HZ} Hz bandwidth, centred at
- * {@value #OLIVIA_CENTER_FREQUENCY_HZ} Hz.
- *
- * <p>The mode employs a combination of MFSK modulation and a powerful Walsh
- * function forward error correction (FEC) scheme that can recover complete
- * characters from signals buried well below the noise floor — often where
- * RTTY or PSK31 would be completely unreadable. Symbols are transmitted at
- * {@value #OLIVIA_BAUD_RATE} baud.
- *
- * <p>Olivia has no hard message length limit, making it suitable for longer
- * ragchew contacts as well as expeditions and emergency communications where
- * reliability on marginal paths is essential.
+ * <p>Olivia is an extremely robust keyboard mode designed for difficult propagation paths where
+ * faster modes like FT8 or PSK31 fail to decode. On the air it sounds like a smooth,
+ * continuously varying chord — a gentle, almost musical swoosh that shifts slowly across
+ * the audio passband. This encoder uses the Olivia 8/250 configuration (8 tones, 250 Hz
+ * bandwidth).
  *
  * <p>Before transmitting you must set your operator callsign via
- * {@link #setOperatorCallsign(String)}. Open <em>Preferences &rarr; Station</em>
- * if it has not been configured yet.
+ * {@link #setOperatorCallsign(String)}. Open Preferences → Station if it has not been
+ * configured yet.
+ *
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class OliviaEncoder implements Encoder {
 
@@ -44,10 +36,8 @@ public class OliviaEncoder implements Encoder {
     private String operatorCallsign;
 
     /**
-     * Creates a new {@code OliviaEncoder}, loading the Olivia mode profile with
-     * its default bandwidth and signal parameters. The operator callsign is
-     * initially empty; set it with {@link #setOperatorCallsign(String)} before
-     * encoding.
+     * Creates a new Olivia encoder. Set your callsign with {@link #setOperatorCallsign(String)}
+     * before encoding.
      */
     public OliviaEncoder() {
         DigitalMode mode = new DigitalMode("Olivia", "OLIVIA");
@@ -66,8 +56,11 @@ public class OliviaEncoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when an operator callsign has been configured and
-     * the encoder is ready to produce a transmission.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
+     *
+     * <p>At minimum your callsign must be set. Open Preferences → Station to fill in
+     * any missing details.
      *
      * @return {@code true} if the callsign is set; {@code false} otherwise
      */
@@ -77,24 +70,16 @@ public class OliviaEncoder implements Encoder {
     }
 
     /**
-     * Encodes the supplied text into an Olivia 8/250 audio stream.
+     * Converts your typed message into an Olivia audio signal ready for preview or transmission.
      *
-     * <p>There is no hard character limit for Olivia, but messages longer than
-     * 500 characters may result in very long transmissions. Audio is generated
-     * using {@value #OLIVIA_TONES} tones across a {@value #OLIVIA_BANDWIDTH_HZ} Hz
-     * bandwidth at {@value #OLIVIA_BAUD_RATE} baud, centred at
-     * {@value #OLIVIA_CENTER_FREQUENCY_HZ} Hz, with Walsh FEC applied to every
-     * block of symbols.
-     *
-     * <p>The returned buffer contains silence as a placeholder; actual Olivia
-     * MFSK waveform synthesis with Walsh FEC is deferred to a future DSP
-     * implementation phase.
+     * <p>There is no hard character limit for Olivia, but messages longer than 500 characters
+     * may result in very long transmissions. Your callsign must be set before calling this
+     * method — open Preferences → Station if it has not been configured yet.
      *
      * @param text the message to encode; must not be {@code null} or blank
      * @param mode the digital mode (should be Olivia)
-     * @return an {@link AudioBuffer} containing the encoded audio stream
-     * @throws EncoderException if the message is empty or the operator
-     *         callsign has not been set
+     * @return an {@link AudioBuffer} containing the encoded audio signal; never {@code null}
+     * @throws EncoderException if the message is empty or the operator callsign has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

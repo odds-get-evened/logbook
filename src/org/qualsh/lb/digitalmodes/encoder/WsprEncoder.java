@@ -5,26 +5,20 @@ import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.mode.ModeProfile;
 
 /**
- * Encoder for the WSPR (Weak Signal Propagation Reporter) digital mode.
+ * Encodes your station details into a WSPR beacon signal ready for preview or transmission.
  *
- * <p>WSPR (pronounced "whisper") is a beacon mode designed for automated
- * propagation research. On the air it sounds like a faint, wavering tone that
- * drifts very slowly over about two minutes. The signal is extraordinarily
- * narrow — roughly 6 Hz wide — and can be decoded at signal-to-noise ratios
- * as low as &minus;31 dB in a 2 500 Hz reference bandwidth.
+ * <p>WSPR (pronounced "whisper") is a propagation-testing beacon mode. On the air it sounds
+ * like a faint, slowly drifting tone lasting about two minutes. Unlike conversational modes,
+ * WSPR does not carry free text — every transmission encodes exactly three things: your
+ * callsign, your Maidenhead grid locator (e.g. {@code "FN42"}), and your transmit power in dBm.
  *
- * <p>Unlike conversational modes, WSPR does not carry free text. Every
- * transmission encodes exactly three pieces of information: your callsign,
- * your Maidenhead grid locator (e.g. {@code "FN42"}), and your transmit power
- * in dBm. This fixed payload is compressed into {@value #WSPR_SYMBOL_COUNT}
- * 4-FSK symbols, with each symbol lasting {@value #WSPR_SYMBOL_PERIOD_SECONDS}
- * seconds and tones spaced {@value #WSPR_TONE_SPACING_HZ} Hz apart. The full
- * frame lasts approximately 110.6 seconds and must start on an even UTC minute.
+ * <p>Before transmitting you must set your callsign, grid square, and transmit power via
+ * {@link #setOperatorCallsign(String)}, {@link #setGridSquare(String)}, and
+ * {@link #setPowerDbm(int)}. Open Preferences → Station if your callsign or grid square
+ * have not been configured yet.
  *
- * <p>Before transmitting you must set your callsign, grid square, and transmit
- * power via {@link #setOperatorCallsign(String)}, {@link #setGridSquare(String)},
- * and {@link #setPowerDbm(int)}. Open <em>Preferences &rarr; Station</em> if
- * callsign or grid have not been configured yet.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class WsprEncoder implements Encoder {
 
@@ -48,9 +42,7 @@ public class WsprEncoder implements Encoder {
     private int powerDbm;
 
     /**
-     * Creates a new {@code WsprEncoder}, loading the WSPR mode profile with its
-     * default bandwidth and signal parameters. The callsign and grid square are
-     * initially empty; configure them before encoding.
+     * Creates a new WSPR encoder. Set your callsign, grid square, and power level before encoding.
      */
     public WsprEncoder() {
         DigitalMode mode = new DigitalMode("WSPR", "WSPR");
@@ -71,10 +63,13 @@ public class WsprEncoder implements Encoder {
     }
 
     /**
-     * Returns {@code true} when both a callsign and a Maidenhead grid square
-     * have been configured, so the encoder can build a valid WSPR payload.
+     * Returns {@code true} if all required information has been entered and the encoder
+     * is ready to generate a signal.
      *
-     * @return {@code true} if both callsign and grid square are set
+     * <p>WSPR requires both your callsign and your Maidenhead grid square. Open
+     * Preferences → Station to fill in any missing details.
+     *
+     * @return {@code true} if both callsign and grid square are set; {@code false} otherwise
      */
     @Override
     public boolean isReadyToEncode() {
@@ -82,29 +77,21 @@ public class WsprEncoder implements Encoder {
     }
 
     /**
-     * Encodes WSPR beacon data into a 4-FSK audio frame.
+     * Converts your station details into a WSPR beacon audio signal ready for preview or
+     * transmission.
      *
-     * <p>WSPR does not support free-form text. The {@code text} parameter is
-     * accepted for interface compatibility but is ignored — the payload is
-     * always derived from your callsign, grid square, and power level. If you
-     * pass text other than a callsign-grid-power string an
-     * {@link EncoderException} is thrown to prevent confusion about what will
-     * actually be transmitted.
+     * <p>WSPR does not carry free text — the payload is always your callsign, grid square,
+     * and power level. The {@code text} parameter is accepted for interface compatibility;
+     * pass any non-blank string (typically your callsign). Your callsign and grid square must
+     * be set before calling this method — open Preferences → Station if they have not been
+     * configured yet.
      *
-     * <p>The frame consists of {@value #WSPR_SYMBOL_COUNT} symbols at
-     * {@value #WSPR_SYMBOL_PERIOD_SECONDS} seconds each, using
-     * {@value #WSPR_TONES} tones spaced {@value #WSPR_TONE_SPACING_HZ} Hz
-     * apart. The returned buffer contains silence as a placeholder; actual
-     * 4-FSK waveform synthesis is deferred to a future DSP implementation
-     * phase.
-     *
-     * @param text  accepted for interface compatibility; pass your callsign or
-     *              any non-blank string — the WSPR payload is fixed
+     * @param text  any non-blank string; the actual WSPR payload is derived from your configured
+     *              callsign, grid square, and power level
      * @param mode  the digital mode (should be WSPR)
-     * @return an {@link AudioBuffer} containing the encoded audio frame
-     * @throws EncoderException if the text is null/blank, if the callsign or
-     *         grid square has not been set, or if a signal generation error
-     *         occurs
+     * @return an {@link AudioBuffer} containing the encoded audio frame; never {@code null}
+     * @throws EncoderException if the text is {@code null} or blank, or if the callsign or
+     *         grid square has not been set
      */
     @Override
     public AudioBuffer encode(String text, DigitalMode mode) throws EncoderException {

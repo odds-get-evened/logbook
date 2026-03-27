@@ -21,29 +21,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * The transmit panel for digital modes, displayed on the Encode tab of the
- * Digital Modes window.
+ * The Encode tab panel where you compose and transmit digital-mode messages.
  *
- * <p>EncodePanel gives you a full message-composition and transmission
- * workflow in one place:
- * <ol>
- *   <li>Type your message in the text area.</li>
- *   <li>Pick a digital mode from the drop-down.</li>
- *   <li>Click <em>Encode</em> to convert the text to audio.</li>
- *   <li>Optionally click <em>Preview Audio</em> to hear what will be
- *       transmitted through your speakers.</li>
- *   <li>Click <em>Transmit</em> when you are ready to go on air (requires
- *       a connected rig configured in Preferences).</li>
- * </ol>
+ * <p>Type your message, choose a mode from the drop-down, and press Encode to convert the text
+ * to audio. You can then press Preview Audio to hear it through your speakers, or press
+ * Transmit to send it on air (requires a rig connected in Preferences). The character counter
+ * tracks how many characters you have typed against the limit for the selected mode.
  *
- * <p>The character counter below the text area tracks how many characters you
- * have typed against the limit imposed by the selected mode. FT8 and WSPR
- * allow a maximum of 13 characters; all other modes treat message length as
- * unlimited.
+ * <p>Call {@link #setOperatorCallsign(String)} and {@link #setOperatorGridSquare(String)}
+ * before encoding to ensure your station details are embedded in the transmitted signal.
  *
- * <p>Call {@link #setOperatorCallsign(String)} and
- * {@link #setOperatorGridSquare(String)} before encoding to ensure your
- * station details are embedded in the transmitted signal.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class EncodePanel extends JPanel {
 
@@ -72,9 +61,7 @@ public class EncodePanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code EncodePanel} with all controls initialised and ready
-     * for use. The panel uses a dark background and a top-to-bottom
-     * GridBagLayout.
+     * Creates a new Encode panel with all controls ready for use.
      */
     public EncodePanel() {
         setBackground(PANEL_BACKGROUND);
@@ -355,16 +342,12 @@ public class EncodePanel extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Sets the operator callsign on every encoder managed by this panel.
+     * Sets the operator callsign that will be embedded in all transmitted signals.
      *
-     * <p>The callsign is embedded in each transmitted signal so that receiving
-     * stations can identify you. You must configure your callsign before
-     * clicking <em>Encode</em>. Open <em>Preferences &rarr; Station</em> to
-     * set your callsign application-wide; this method is called automatically
-     * when those preferences are saved.
+     * <p>This is called automatically when you save your callsign in Preferences → Station.
+     * You must have a callsign configured before pressing Encode.
      *
-     * @param callsign your licensed amateur radio callsign, for example
-     *                 {@code "W1AW"}
+     * @param callsign your licensed amateur radio callsign, for example {@code "W1AW"}
      */
     public void setOperatorCallsign(String callsign) {
         for (Encoder encoder : encoders.values()) {
@@ -379,13 +362,12 @@ public class EncodePanel extends JPanel {
     }
 
     /**
-     * Sets the Maidenhead grid square on the WSPR encoder.
+     * Sets the Maidenhead grid square used in WSPR transmissions.
      *
-     * <p>WSPR transmissions always include your four-character grid locator
-     * (for example {@code "FN42"}) so that receiving stations can calculate
-     * propagation paths. This value is only used by the WSPR encoder; all other
-     * modes ignore it. Open <em>Preferences &rarr; Station</em> to configure
-     * your grid square application-wide.
+     * <p>WSPR beacons always include your four-character grid locator (for example
+     * {@code "FN42"}) so receiving stations can calculate propagation paths. This value is
+     * only used by the WSPR encoder. Open Preferences → Station to configure your grid square
+     * application-wide.
      *
      * @param grid your four-character Maidenhead grid locator
      */
@@ -400,22 +382,19 @@ public class EncodePanel extends JPanel {
     /**
      * Returns the digital mode currently selected in the mode drop-down.
      *
-     * @return the selected {@link DigitalMode}; never {@code null} as long as
-     *         at least one mode has been loaded
+     * @return the selected mode; never {@code null} as long as at least one mode is available
      */
     public DigitalMode getSelectedMode() {
         return (DigitalMode) modeComboBox.getSelectedItem();
     }
 
     /**
-     * Programmatically selects a digital mode in the mode drop-down.
+     * Selects a digital mode in the mode drop-down.
      *
-     * <p>Use this to restore a previously chosen mode when the window is
-     * reopened, or to pre-select the mode that matches a log entry the user is
-     * reviewing. If {@code mode} is not present in the combo box this method
-     * has no effect.
+     * <p>Use this to restore a previously chosen mode when the window is reopened. If the
+     * given mode is not available, this method has no effect.
      *
-     * @param mode the {@link DigitalMode} to select
+     * @param mode the mode to select
      */
     public void setSelectedMode(DigitalMode mode) {
         modeComboBox.setSelectedItem(mode);

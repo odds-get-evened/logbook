@@ -7,24 +7,17 @@ import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.SourceDataLine;
 
 /**
- * Controls playback of audio stored in an {@link AudioBuffer}.
+ * Controls playback of whatever audio is currently loaded in the application.
  *
- * <p>Audio is rendered through the default system output using a
- * {@link SourceDataLine}. Playback runs on a dedicated background thread,
- * leaving the calling thread free for UI updates.
+ * <p>Audio plays through your computer's default speakers or headphones. Use
+ * {@link #play()}, {@link #pause()}, and {@link #stop()} to control playback,
+ * and {@link #setLooping(boolean)} to repeat audio automatically.
  *
- * <p>Typical usage:
- * <pre>{@code
- * PlaybackController pc = new PlaybackController(myBuffer);
- * pc.setLooping(true);
- * pc.play();
- * // ... later ...
- * pc.stop();
- * }</pre>
+ * <p>Playback runs quietly in the background so the rest of the application
+ * remains fully responsive while audio is playing.
  *
- * <p>Only {@link javax.sound.sampled} is used — no external libraries are
- * required. The buffer is assumed to contain 16-bit, mono, signed,
- * little-endian PCM audio.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class PlaybackController {
 
@@ -38,8 +31,7 @@ public class PlaybackController {
     private Thread playbackThread;
 
     /**
-     * Creates a new {@code PlaybackController} that will play audio from the
-     * given buffer.
+     * Creates a new playback controller linked to the given audio buffer.
      *
      * @param buffer the audio buffer to play back; must not be {@code null}
      */
@@ -48,23 +40,11 @@ public class PlaybackController {
     }
 
     /**
-     * Starts playback from the current position.
+     * Starts playing the loaded audio through your computer's speakers or headphones.
      *
-     * <p>If the buffer is empty this method returns immediately without
-     * doing anything. Otherwise a {@link SourceDataLine} is opened using
-     * the buffer's sample rate (16-bit, mono, signed, little-endian) and a
-     * background thread begins writing audio data to the line in 4096-byte
-     * chunks.
-     *
-     * <p>When the end of the buffer is reached:
-     * <ul>
-     *   <li>If {@link #setLooping(boolean) looping} is {@code true} the
-     *       position resets to zero and playback continues seamlessly.</li>
-     *   <li>Otherwise playback stops automatically, the line is closed, and
-     *       {@link #isPlaying()} returns {@code false}.</li>
-     * </ul>
-     *
-     * <p>Calling {@code play()} while already playing has no effect.
+     * <p>If no audio is loaded, or if playback is already running, this method has no effect.
+     * When the audio reaches the end, playback stops automatically unless looping is turned on,
+     * in which case it restarts from the beginning.
      */
     public synchronized void play() {
         if (buffer.isEmpty() || playing) {
@@ -129,11 +109,8 @@ public class PlaybackController {
     /**
      * Pauses playback at the current position.
      *
-     * <p>The playback thread is stopped and the output line is closed. The
-     * current sample position is preserved so that a subsequent call to
-     * {@link #play()} resumes from where playback left off.
-     *
-     * <p>If playback is not currently active this method has no effect.
+     * <p>Press Play to resume from the same spot. If playback is not currently
+     * active, this method has no effect.
      */
     public synchronized void pause() {
         if (!playing) {
@@ -145,11 +122,9 @@ public class PlaybackController {
     }
 
     /**
-     * Stops playback and resets the position to the beginning of the buffer.
+     * Stops playback and returns to the beginning of the audio.
      *
-     * <p>The playback thread is stopped, the output line is closed, and
-     * {@link #getPlaybackPositionSamples()} returns {@code 0} after this
-     * call. If playback is not currently active the position is still reset.
+     * <p>The position is reset even if playback was not active at the time of the call.
      */
     public synchronized void stop() {
         playing = false;
@@ -159,56 +134,49 @@ public class PlaybackController {
     }
 
     /**
-     * Enables or disables looping.
+     * Turns looping on or off.
      *
-     * <p>When looping is enabled, playback automatically restarts from the
-     * beginning each time the end of the buffer is reached. This setting
-     * takes effect immediately, even during active playback.
+     * <p>When looping is turned on, the audio will automatically restart from the
+     * beginning each time it finishes playing. This setting takes effect immediately,
+     * even during active playback.
      *
-     * @param loop {@code true} to loop continuously; {@code false} to stop
-     *             at the end of the buffer
+     * @param loop {@code true} to loop continuously; {@code false} to stop at the end
      */
     public void setLooping(boolean loop) {
         this.looping = loop;
     }
 
     /**
-     * Returns whether looping is currently enabled.
+     * Returns {@code true} if looping is currently turned on.
      *
-     * @return {@code true} if looping is enabled
+     * @return {@code true} if audio will repeat automatically when it finishes
      */
     public boolean isLooping() {
         return looping;
     }
 
     /**
-     * Returns whether audio is currently being played back.
+     * Returns {@code true} if audio is currently playing.
      *
-     * @return {@code true} while the playback thread is active
+     * @return {@code true} while playback is active
      */
     public boolean isPlaying() {
         return playing;
     }
 
     /**
-     * Returns the current playback position as a sample index.
+     * Returns the current playback position measured in audio samples from the start.
      *
-     * <p>For 16-bit mono audio, multiply by 2 to get the corresponding
-     * byte offset in the buffer.
-     *
-     * @return the number of samples from the start of the buffer at which
-     *         playback is currently positioned
+     * @return the number of samples played so far; {@code 0} when at the beginning
      */
     public int getPlaybackPositionSamples() {
         return playbackPositionSamples;
     }
 
     /**
-     * Returns the current playback position in seconds.
+     * Returns the current playback position in seconds from the start of the audio.
      *
-     * <p>Calculated as
-     * {@code playbackPositionSamples / buffer.getSampleRate()}.
-     * Returns {@code 0.0} if the buffer's sample rate is zero.
+     * <p>Returns {@code 0.0} if no audio is loaded or the sample rate is unknown.
      *
      * @return the playback position in seconds
      */

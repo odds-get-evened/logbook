@@ -10,34 +10,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A transparent overlay panel that renders interactive frequency and bandwidth
- * markers on top of an {@link FFTPanel}.
+ * An interactive overlay that lets you select a centre frequency and bandwidth on the
+ * spectrum display.
  *
- * <p>{@code FrequencySelector} draws three vertical lines:
- * <ul>
- *   <li>A solid <strong>yellow centre-frequency line</strong> that the
- *       operator can reposition by clicking anywhere on the panel.</li>
- *   <li>Two dashed <strong>orange bandwidth boundary lines</strong> (left and
- *       right) that indicate the occupied signal bandwidth. Either boundary
- *       can be dragged horizontally to resize the bandwidth window
- *       symmetrically about the centre frequency.</li>
- * </ul>
- * A very subtle semi-transparent fill is drawn between the two boundary lines
- * to highlight the selected passband.
+ * <p>The selector draws a yellow vertical line for your chosen centre frequency and two orange
+ * dashed lines showing the signal bandwidth on either side. Click anywhere on the spectrum to
+ * move the centre frequency there, or drag either orange bandwidth line to widen or narrow the
+ * selected passband. Register a {@link FrequencySelectorListener} to be notified when you make
+ * changes.
  *
- * <p>Typical usage — place this panel as an overlay on top of an
- * {@code FFTPanel} using a {@link javax.swing.JLayeredPane}:
- * <pre>
- *   FFTPanel fftPanel = new FFTPanel();
- *   FrequencySelector selector = new FrequencySelector();
- *
- *   JLayeredPane layered = new JLayeredPane();
- *   layered.add(fftPanel,  JLayeredPane.DEFAULT_LAYER);
- *   layered.add(selector,  JLayeredPane.PALETTE_LAYER);
- * </pre>
- *
- * <p>Register a {@link FrequencySelectorListener} to be notified whenever the
- * operator changes the centre frequency or bandwidth.
+ * @author Logbook Development Team
+ * @version 1.0
  */
 public class FrequencySelector extends JPanel {
 
@@ -71,23 +54,24 @@ public class FrequencySelector extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Receives notifications when the operator adjusts the centre frequency or
-     * bandwidth on a {@link FrequencySelector}.
+     * Notified when you adjust the centre frequency or bandwidth on a {@link FrequencySelector}.
+     *
+     * @author Logbook Development Team
+     * @version 1.0
      */
     public interface FrequencySelectorListener {
 
         /**
-         * Called when the centre-frequency marker has been moved.
+         * Called when you click to move the centre-frequency marker to a new position.
          *
          * @param centerHz the new centre frequency in hertz
          */
         void onCenterFrequencyChanged(double centerHz);
 
         /**
-         * Called when either bandwidth boundary has been dragged, changing the
-         * width of the passband selection.
+         * Called when you drag a bandwidth boundary line to change the selected passband width.
          *
-         * @param bandwidthHz the new occupied bandwidth in hertz
+         * @param bandwidthHz the new bandwidth in hertz
          */
         void onBandwidthChanged(double bandwidthHz);
     }
@@ -97,14 +81,9 @@ public class FrequencySelector extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code FrequencySelector} with default settings:
-     * centre frequency 1500 Hz, bandwidth 500 Hz, sample rate 8000 Hz, FFT
-     * size 1024.
-     *
-     * <p>The panel is transparent ({@code opaque = false}) so the
-     * {@link FFTPanel} beneath it shows through. Mouse listeners are attached
-     * automatically; no further configuration is required before adding the
-     * panel to a component hierarchy.
+     * Creates a new frequency selector with a default centre frequency of {@code 1500} Hz
+     * and bandwidth of {@code 500} Hz. The panel is transparent so the spectrum display
+     * beneath it shows through.
      */
     public FrequencySelector() {
         setOpaque(false);
@@ -175,20 +154,11 @@ public class FrequencySelector extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Paints the frequency and bandwidth markers.
+     * Draws the centre-frequency and bandwidth markers on screen.
      *
-     * <p>The following elements are drawn:
-     * <ul>
-     *   <li>A very subtle white filled rectangle between the left and right
-     *       bandwidth boundary pixels.</li>
-     *   <li>A dashed orange vertical line at the left bandwidth boundary.</li>
-     *   <li>A dashed orange vertical line at the right bandwidth boundary.</li>
-     *   <li>A solid 2 px yellow vertical line at the centre frequency.</li>
-     *   <li>A small frequency label (e.g. {@code "1500 Hz"}) drawn just above
-     *       the centre line.</li>
-     * </ul>
+     * <p>This method is called automatically by the display framework.
      *
-     * @param g the {@code Graphics} context provided by Swing
+     * @param g the graphics context provided by the display framework
      */
     @Override
     protected void paintComponent(Graphics g) {
@@ -240,8 +210,8 @@ public class FrequencySelector extends JPanel {
     /**
      * Moves the centre-frequency marker to the specified frequency.
      *
-     * <p>The value is clamped to the range {@code [0, sampleRate / 2]}. The
-     * panel is repainted and all registered listeners are notified.
+     * <p>The value is clamped to the valid frequency range. Registered listeners are notified
+     * of the change.
      *
      * @param hz the desired centre frequency in hertz
      */
@@ -252,12 +222,12 @@ public class FrequencySelector extends JPanel {
     }
 
     /**
-     * Sets the occupied bandwidth shown between the two boundary markers.
+     * Sets the bandwidth shown between the two orange boundary markers.
      *
-     * <p>The value is clamped to a minimum of 50 Hz. The panel is repainted
-     * and all registered listeners are notified.
+     * <p>Values below {@code 50} Hz are raised to {@code 50} Hz. Registered listeners are
+     * notified of the change.
      *
-     * @param hz the desired bandwidth in hertz; values below 50 are raised to 50
+     * @param hz the desired bandwidth in hertz
      */
     public void setBandwidth(double hz) {
         bandwidthHz = Math.max(50.0, hz);
@@ -266,15 +236,12 @@ public class FrequencySelector extends JPanel {
     }
 
     /**
-     * Configures the bandwidth markers to match the typical signal footprint of
-     * the supplied {@link DigitalMode}.
+     * Adjusts the bandwidth markers to match the typical signal width of the given digital mode.
      *
-     * <p>The bandwidth is obtained from {@link ModeProfile#getProfile(DigitalMode)}
-     * and applied via {@link #setBandwidth(double)}, which clamps the value,
-     * triggers a repaint, and notifies listeners.
+     * <p>For example, selecting FT8 sets the bandwidth to about 50 Hz; selecting RTTY sets it
+     * to about 250 Hz. Use this when you switch modes to keep the display accurate.
      *
-     * @param mode the digital mode whose default bandwidth should be applied;
-     *             must not be {@code null}
+     * @param mode the digital mode to apply; must not be {@code null}
      */
     public void applyModeProfile(DigitalMode mode) {
         ModeProfile profile = ModeProfile.getProfile(mode);
@@ -284,7 +251,7 @@ public class FrequencySelector extends JPanel {
     /**
      * Returns the current centre frequency shown by the yellow marker line.
      *
-     * @return centre frequency in hertz
+     * @return centre frequency in hertz; never negative
      */
     public double getCenterFrequency() {
         return centerFrequencyHz;
@@ -293,7 +260,7 @@ public class FrequencySelector extends JPanel {
     /**
      * Returns the current bandwidth shown between the two orange boundary lines.
      *
-     * @return occupied bandwidth in hertz
+     * @return bandwidth in hertz; always at least {@code 50.0}
      */
     public double getBandwidth() {
         return bandwidthHz;
@@ -304,12 +271,12 @@ public class FrequencySelector extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Sets the audio sample rate used to map frequencies to pixel positions.
+     * Sets the audio sample rate used to convert frequencies to screen positions.
      *
-     * <p>The displayable frequency range is {@code [0, sampleRate / 2]}
-     * (Nyquist). Changing this value forces a repaint.
+     * <p>This should match the sample rate of the connected audio buffer. Changing this value
+     * updates the display immediately.
      *
-     * @param sampleRate the sample rate in hertz; must be greater than zero
+     * @param sampleRate the sample rate in hertz; must be greater than {@code 0}
      */
     public void setSampleRate(double sampleRate) {
         this.sampleRate = sampleRate;
@@ -317,13 +284,12 @@ public class FrequencySelector extends JPanel {
     }
 
     /**
-     * Sets the FFT window size used to map frequencies to pixel positions.
+     * Sets the FFT window size so marker positions align with the spectrum display.
      *
-     * <p>This should match the FFT size used by the {@link FFTPanel} so that
-     * the marker lines align with the displayed spectrum bins. Changing this
-     * value forces a repaint.
+     * <p>This should match the FFT size used by the connected {@link FFTPanel}. Changing this
+     * value updates the display immediately.
      *
-     * @param fftSize the number of FFT bins; must be greater than zero
+     * @param fftSize the number of FFT bins; must be greater than {@code 0}
      */
     public void setFftSize(int fftSize) {
         this.fftSize = fftSize;
@@ -335,11 +301,7 @@ public class FrequencySelector extends JPanel {
     // -------------------------------------------------------------------------
 
     /**
-     * Registers a listener to be notified when the centre frequency or
-     * bandwidth changes.
-     *
-     * <p>Adding the same listener instance more than once results in duplicate
-     * notifications. Adding {@code null} is silently ignored.
+     * Registers a listener to be notified when you change the centre frequency or bandwidth.
      *
      * @param listener the listener to add; ignored if {@code null}
      */
@@ -350,9 +312,7 @@ public class FrequencySelector extends JPanel {
     }
 
     /**
-     * Removes a previously registered listener.
-     *
-     * <p>If the listener was not registered this method does nothing.
+     * Removes a previously registered listener. Does nothing if the listener was not registered.
      *
      * @param listener the listener to remove; ignored if {@code null}
      */
