@@ -3,6 +3,7 @@ package org.qualsh.lb.digitalmodes.spectrum;
 import com.github.psambit9791.jdsp.transform.FastFourier;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
+import org.qualsh.lb.digitalmodes.audio.PlaybackController;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,10 +25,12 @@ import java.awt.geom.AffineTransform;
 public class FFTPanel extends JPanel implements AudioBufferListener {
 
     private AudioBuffer buffer;
+    private PlaybackController playbackController;
     private double[] magnitudes;
     private Timer refreshTimer;
 
     private static final int    REFRESH_RATE_MS  = 100;
+    private static final int    MAX_FFT_SAMPLES  = 4096;
     private static final Color  BACKGROUND_COLOR = Color.BLACK;
     private static final Color  TRACE_COLOR      = new Color(0, 200, 0);
     private static final Color  GRID_COLOR       = new Color(40, 40, 40);
@@ -35,8 +38,10 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     private static final int    PADDING          = 30;
 
     // Cached when updateMagnitudes() runs; used by paintComponent() for Hz labels.
-    private float cachedSampleRate = 0f;
-    private int   cachedFFTSize    = 0;
+    private float cachedSampleRate    = 0f;
+    private int   cachedFFTSize       = 0;
+    // Skip recomputing FFT when the playback position has not changed.
+    private int   lastComputedPosition = -1;
 
     // -------------------------------------------------------------------------
     // Construction
@@ -60,6 +65,16 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
+
+    /**
+     * Connects this spectrum display to the given playback controller so the FFT window
+     * tracks the current playback position.
+     *
+     * @param playbackController the playback controller; may be {@code null} to disconnect
+     */
+    public void setPlaybackController(PlaybackController playbackController) {
+        this.playbackController = playbackController;
+    }
 
     /**
      * Connects this spectrum display to the given audio buffer.
@@ -90,6 +105,7 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
      */
     @Override
     public void onBufferChanged(AudioBuffer buffer) {
+        lastComputedPosition = -1; // Force recompute on next timer tick.
         repaint();
     }
 
@@ -105,26 +121,49 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
             magnitudes = new double[0];
             return;
         }
+
+        int currentPosition = (playbackController != null)
+                ? playbackController.getPlaybackPositionSamples()
+                : 0;
+
+        // Skip the FFT entirely when the playback position has not changed.
+        if (currentPosition == lastComputedPosition && magnitudes.length > 0) {
+            return;
+        }
+        lastComputedPosition = currentPosition;
+
         try {
             byte[] raw = buffer.getSamples();
             int numSamples = raw.length / 2; // 16-bit mono: 2 bytes per sample
 
+            // Use a fixed window of up to MAX_FFT_SAMPLES starting at the current
+            // playback position, shifted back if necessary to stay within bounds.
+            int windowStart = currentPosition;
+            if (windowStart + MAX_FFT_SAMPLES > numSamples) {
+                windowStart = Math.max(0, numSamples - MAX_FFT_SAMPLES);
+            }
+            int windowSamples = Math.min(MAX_FFT_SAMPLES, numSamples - windowStart);
+            if (windowSamples <= 0) {
+                magnitudes = new double[0];
+                return;
+            }
+
             // Convert 16-bit signed little-endian PCM to normalised doubles.
-            double[] pcm = new double[numSamples];
-            for (int i = 0; i < numSamples; i++) {
-                int lo     = raw[i * 2]     & 0xFF; // unsigned low byte
-                int hi     = raw[i * 2 + 1];        // signed high byte
+            double[] pcm = new double[windowSamples];
+            for (int i = 0; i < windowSamples; i++) {
+                int idx    = windowStart + i;
+                int lo     = raw[idx * 2]     & 0xFF; // unsigned low byte
+                int hi     = raw[idx * 2 + 1];        // signed high byte
                 int sample = (hi << 8) | lo;
                 pcm[i] = sample / 32768.0;
             }
 
             // Pad to next power of two (required for efficient FFT).
             int fftSize = 1;
-            while (fftSize < numSamples) fftSize <<= 1;
+            while (fftSize < windowSamples) fftSize <<= 1;
 
             double[] signal = new double[fftSize];
-            System.arraycopy(pcm, 0, signal, 0, numSamples);
-            // Remaining entries are implicitly zero (zero-padding).
+            System.arraycopy(pcm, 0, signal, 0, windowSamples);
 
             FastFourier fft = new FastFourier(signal);
             fft.transform();

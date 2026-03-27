@@ -3,6 +3,7 @@ package org.qualsh.lb.digitalmodes.spectrum;
 import com.github.psambit9791.jdsp.transform.FastFourier;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
+import org.qualsh.lb.digitalmodes.audio.PlaybackController;
 
 import javax.swing.*;
 import java.awt.*;
@@ -25,10 +26,12 @@ import java.awt.image.BufferedImage;
 public class WaterfallPanel extends JPanel implements AudioBufferListener {
 
     private AudioBuffer buffer;
+    private PlaybackController playbackController;
     private BufferedImage waterfallImage;
     private Timer refreshTimer;
 
     private static final int   REFRESH_RATE_MS  = 100;
+    private static final int   WINDOW_SAMPLES   = 4096;
     private static final int   PREFERRED_HEIGHT  = 200;
     private static final Color BACKGROUND_COLOR  = Color.BLACK;
     private static final Color LABEL_COLOR       = Color.LIGHT_GRAY;
@@ -55,6 +58,16 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
+
+    /**
+     * Connects this waterfall display to the given playback controller so rows are only added
+     * during active playback, tracking the current position in the audio.
+     *
+     * @param playbackController the playback controller; may be {@code null} to disconnect
+     */
+    public void setPlaybackController(PlaybackController playbackController) {
+        this.playbackController = playbackController;
+    }
 
     /**
      * Connects this waterfall display to the given audio buffer.
@@ -84,8 +97,14 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
      */
     @Override
     public void onBufferChanged(AudioBuffer buffer) {
-        // The timer-driven scrollAndUpdate() picks up new data automatically;
-        // no immediate action is required here.
+        // Clear the waterfall so stale history from a previous file is not shown.
+        if (waterfallImage != null) {
+            Graphics2D g2 = waterfallImage.createGraphics();
+            g2.setColor(BACKGROUND_COLOR);
+            g2.fillRect(0, 0, waterfallImage.getWidth(), waterfallImage.getHeight());
+            g2.dispose();
+        }
+        repaint();
     }
 
     /**
@@ -100,26 +119,45 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
             return;
         }
 
+        // Only add new rows while audio is actively playing.
+        if (playbackController == null || !playbackController.isPlaying()) {
+            return;
+        }
+
+        int playbackPos = playbackController.getPlaybackPositionSamples();
+
         double[] magnitudes;
         try {
             byte[] raw = buffer.getSamples();
             int numSamples = raw.length / 2; // 16-bit mono: 2 bytes per sample
 
+            // Use a fixed window of up to WINDOW_SAMPLES at the current playback
+            // position, shifted back if necessary to stay within bounds.
+            int windowStart = playbackPos;
+            if (windowStart + WINDOW_SAMPLES > numSamples) {
+                windowStart = Math.max(0, numSamples - WINDOW_SAMPLES);
+            }
+            int windowSamples = Math.min(WINDOW_SAMPLES, numSamples - windowStart);
+            if (windowSamples <= 0) {
+                return;
+            }
+
             // Convert 16-bit signed little-endian PCM to normalised doubles.
-            double[] pcm = new double[numSamples];
-            for (int i = 0; i < numSamples; i++) {
-                int lo     = raw[i * 2]     & 0xFF; // unsigned low byte
-                int hi     = raw[i * 2 + 1];        // signed high byte
+            double[] pcm = new double[windowSamples];
+            for (int i = 0; i < windowSamples; i++) {
+                int idx    = windowStart + i;
+                int lo     = raw[idx * 2]     & 0xFF; // unsigned low byte
+                int hi     = raw[idx * 2 + 1];        // signed high byte
                 int sample = (hi << 8) | lo;
                 pcm[i] = sample / 32768.0;
             }
 
             // Pad to next power of two (required for efficient FFT).
             int fftSize = 1;
-            while (fftSize < numSamples) fftSize <<= 1;
+            while (fftSize < windowSamples) fftSize <<= 1;
 
             double[] signal = new double[fftSize];
-            System.arraycopy(pcm, 0, signal, 0, numSamples);
+            System.arraycopy(pcm, 0, signal, 0, windowSamples);
 
             FastFourier fft = new FastFourier(signal);
             fft.transform();
