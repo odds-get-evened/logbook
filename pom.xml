@@ -42,7 +42,8 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.2.5</version>
 				<configuration>
-					<argLine>-Djava.awt.headless=true</argLine>
+					<forkCount>0</forkCount>
+				<argLine>-Djava.awt.headless=true</argLine>
 				</configuration>
 			</plugin>
 		<plugin>
