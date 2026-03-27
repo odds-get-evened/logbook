@@ -1,6 +1,6 @@
 package org.qualsh.lb.digitalmodes.spectrum;
 
-import com.github.psambit9791.jdsp.transform.DiscreteFourier;
+import com.github.psambit9791.jdsp.transform.FastFourier;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
 
@@ -77,7 +77,7 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
         if (buffer != null) {
             buffer.addListener(this);
         }
-        updateMagnitudes();
+        repaint();
     }
 
     /**
@@ -90,7 +90,7 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
      */
     @Override
     public void onBufferChanged(AudioBuffer buffer) {
-        updateMagnitudes();
+        repaint();
     }
 
     /**
@@ -126,9 +126,9 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
             System.arraycopy(pcm, 0, signal, 0, numSamples);
             // Remaining entries are implicitly zero (zero-padding).
 
-            DiscreteFourier dft = new DiscreteFourier(signal);
-            dft.transform();
-            magnitudes = dft.getMagnitude(false);
+            FastFourier fft = new FastFourier(signal);
+            fft.transform();
+            magnitudes = fft.getMagnitude(false);
 
             cachedSampleRate = buffer.getSampleRate();
             cachedFFTSize    = fftSize;

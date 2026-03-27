@@ -1,6 +1,6 @@
 package org.qualsh.lb.digitalmodes.spectrum;
 
-import com.github.psambit9791.jdsp.transform.DiscreteFourier;
+import com.github.psambit9791.jdsp.transform.FastFourier;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
 
@@ -121,9 +121,9 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
             double[] signal = new double[fftSize];
             System.arraycopy(pcm, 0, signal, 0, numSamples);
 
-            DiscreteFourier dft = new DiscreteFourier(signal);
-            dft.transform();
-            magnitudes = dft.getMagnitude(false);
+            FastFourier fft = new FastFourier(signal);
+            fft.transform();
+            magnitudes = fft.getMagnitude(false);
         } catch (Exception e) {
             return;
         }
