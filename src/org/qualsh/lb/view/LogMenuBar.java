@@ -3,6 +3,7 @@ package org.qualsh.lb.view;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.File;
 
@@ -37,6 +38,7 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 	protected PreferencesDialog prefDialog;
 	protected AboutDialog aboutDialog;
 	private LogsModel logsModel;
+	private MainWin mainWin;
 	public AboutDialog getAboutDialog() {
 		return aboutDialog;
 	}
@@ -87,6 +89,7 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 		add(getMenuEdit());
 
 		JMenu menuTools = new JMenu("Tools");
+		this.menuTools = menuTools;
 		add(menuTools);
 		JMenuItem menuItemCatSettings = new JMenuItem("CAT Settings\u2026");
 		menuItemCatSettings.addActionListener(new ActionListener() {
@@ -336,6 +339,47 @@ public class LogMenuBar extends JMenuBar implements MenuKeyListener {
 
 	public LogsModel getLogsModel() {
 		return logsModel;
+	}
+
+	/**
+	 * Stores a reference to the main application window and adds the
+	 * <em>Digital Modes</em> entry to the <em>Tools</em> menu.
+	 *
+	 * <p>This method should be called once by {@code MainWin} immediately after
+	 * the menu bar has been constructed and added to the frame. The Digital
+	 * Modes menu item is created here rather than in the constructor so that the
+	 * action listener can reference the fully initialised {@code MainWin}
+	 * instance.
+	 *
+	 * <p>The item is registered with the keyboard accelerator
+	 * <kbd>Ctrl+D</kbd> (mirroring the global key dispatcher in
+	 * {@code MainWin}) and a descriptive tooltip.
+	 *
+	 * @param mainWin the main application window; must not be {@code null}
+	 */
+	public void setMainWin(MainWin mainWin) {
+		this.mainWin = mainWin;
+
+		JMenuItem digitalModesItem = new JMenuItem("Digital Modes");
+		digitalModesItem.setAccelerator(
+				KeyStroke.getKeyStroke(KeyEvent.VK_D, InputEvent.CTRL_MASK));
+		digitalModesItem.setToolTipText("Open the Digital Modes decode and encode window");
+		digitalModesItem.addActionListener(e -> mainWin.openDigitalModesWindow());
+
+		if (this.menuTools != null) {
+			this.menuTools.addSeparator();
+			this.menuTools.add(digitalModesItem);
+		}
+	}
+
+	/**
+	 * Returns the stored reference to the main application window, or
+	 * {@code null} if {@link #setMainWin(MainWin)} has not been called yet.
+	 *
+	 * @return the main window, or {@code null}
+	 */
+	public MainWin getMainWin() {
+		return mainWin;
 	}
 
 }
