@@ -42,7 +42,6 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.5.3</version>
 				<configuration>
-					<forkCount>0</forkCount>
 				<argLine>-Djava.awt.headless=true</argLine>
 				</configuration>
 			</plugin>
@@ -160,6 +159,12 @@
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter</artifactId>
 			<version>${junit.jupiter.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.platform</groupId>
+			<artifactId>junit-platform-launcher</artifactId>
+			<version>1.10.2</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
