@@ -17,7 +17,12 @@ import java.io.IOException;
  * <p>You can load an existing WAV file for decoding via {@link #loadFile(File)}, or record
  * live audio from your computer's audio input via {@link #startRecording(File)} and
  * {@link #stopRecording()}. When recording stops, the recorded audio is automatically
- * loaded into the decoder so you can decode it immediately.
+ * available for the pipeline to stream.
+ *
+ * <p>File loading no longer reads the entire WAV into memory. Instead, it reads
+ * only the audio format header and stores the file reference. The actual audio
+ * streaming is handled by the {@link AudioProducer} via
+ * {@link AudioPipelineController#loadWavFile(File)}.
  *
  * @author Logbook Development Team
  * @version 1.0
@@ -26,6 +31,7 @@ public class WavFileSource implements AudioSource {
 
     private File wavFile;
     private AudioBuffer buffer;
+    private AudioFormat audioFormat;
     private boolean recording;
     private TargetDataLine recordingLine;
     private Thread recordingThread;
@@ -51,10 +57,12 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Opens an audio file from your computer and loads it into the application for decoding.
+     * Reads the audio format header from a WAV file and stores the file
+     * reference for later streaming by the pipeline.
      *
-     * <p>Any previously loaded audio is replaced. The spectrum display and decoder will
-     * immediately begin working with the newly loaded file.
+     * <p>Unlike the previous implementation, this method does <strong>not</strong>
+     * read the file contents into memory. The actual streaming is handled by
+     * {@link AudioProducer}.
      *
      * @param file the WAV file to open; must not be {@code null} and must exist on disk
      * @throws IOException                   if the file cannot be read
@@ -62,11 +70,18 @@ public class WavFileSource implements AudioSource {
      */
     public void loadFile(File file) throws IOException, UnsupportedAudioFileException {
         try (AudioInputStream ais = AudioSystem.getAudioInputStream(file)) {
-            AudioFormat format = ais.getFormat();
-            byte[] bytes = ais.readAllBytes();
-            buffer.load(bytes, format.getSampleRate());
+            this.audioFormat = ais.getFormat();
         }
         this.wavFile = file;
+    }
+
+    /**
+     * Returns the audio format of the most recently loaded or recorded file.
+     *
+     * @return the audio format, or {@code null} if no file has been loaded
+     */
+    public AudioFormat getAudioFormat() {
+        return audioFormat;
     }
 
     /**
@@ -98,11 +113,11 @@ public class WavFileSource implements AudioSource {
     }
 
     /**
-     * Stops the current recording, saves the file, and automatically loads the recorded audio for decoding.
+     * Stops the current recording, saves the file, and makes the recorded file
+     * available for streaming.
      *
-     * <p>After this call, the recorded audio is available in the spectrum display and decoder
-     * exactly as if you had opened the file manually. If no recording is in progress, this
-     * method does nothing.
+     * <p>After this call, the recorded file can be loaded into the streaming
+     * pipeline via {@link AudioPipelineController#loadWavFile(File)}.
      *
      * @throws InterruptedException          if the operation is interrupted while finishing the recording
      * @throws IOException                   if the recorded file cannot be read back after saving

@@ -30,6 +30,9 @@ import java.util.concurrent.TimeUnit;
  *       that audio is playing.</li>
  * </ul>
  *
+ * <p>All FFT working arrays are pre-allocated at construction and reused on
+ * every tick to avoid garbage-collection pressure.
+ *
  * <p>Call {@link #start()} to begin ticking and {@link #stop()} to shut down cleanly.
  * The underlying executor thread is a daemon so it will not prevent JVM exit.
  *
@@ -40,6 +43,7 @@ public class DspConsumerThread {
 
     private static final int REFRESH_RATE_MS  = 80;
     private static final int FFT_WINDOW_SAMPLES = 4096;
+    private static final int FFT_SIZE = nextPowerOfTwo(FFT_WINDOW_SAMPLES);
 
     private final AudioBuffer        snapshotBuffer;
     private final PlaybackController playbackController;
@@ -50,6 +54,11 @@ public class DspConsumerThread {
     private volatile AudioRingBuffer ringBuffer;
 
     private ScheduledExecutorService scheduler;
+
+    // Pre-allocated working arrays — reused every tick, zero allocations in hot path
+    private final float[]  fftWindow     = new float[FFT_WINDOW_SAMPLES];
+    private final double[] fftSignal     = new double[FFT_SIZE];
+    private final byte[]   windowBytes   = new byte[FFT_WINDOW_SAMPLES * 2]; // 16-bit mono
 
     /**
      * Creates a new DSP consumer thread.
@@ -136,14 +145,13 @@ public class DspConsumerThread {
      * computes FFT, and pushes results to the panels. Waterfall scrolls always.
      */
     private void tickFromRingBuffer(AudioRingBuffer rb) {
-        float[] window = new float[FFT_WINDOW_SAMPLES];
-        int count = rb.readLatest(window, FFT_WINDOW_SAMPLES);
+        int count = rb.readLatest(fftWindow, FFT_WINDOW_SAMPLES);
         if (count < 2) {
             return;
         }
 
         float sampleRate = rb.getSampleRate();
-        double[] magnitudes = computeFft(window, count);
+        double[] magnitudes = computeFft(fftWindow, count);
         if (magnitudes == null) {
             return;
         }
@@ -172,10 +180,10 @@ public class DspConsumerThread {
                 ? playbackController.getPlaybackPositionSamples()
                 : 0;
 
-        byte[] raw        = snapshotBuffer.getSamples();
-        float  sampleRate = snapshotBuffer.getSampleRate();
+        int bufferLength = snapshotBuffer.getLength();
+        float sampleRate = snapshotBuffer.getSampleRate();
 
-        int numSamples  = raw.length / 2; // 16-bit mono: 2 bytes per sample
+        int numSamples  = bufferLength / 2; // 16-bit mono: 2 bytes per sample
         int windowStart = currentPosition;
         if (windowStart + FFT_WINDOW_SAMPLES > numSamples) {
             windowStart = Math.max(0, numSamples - FFT_WINDOW_SAMPLES);
@@ -185,16 +193,20 @@ public class DspConsumerThread {
             return;
         }
 
-        // Convert 16-bit signed little-endian PCM to normalised floats.
-        float[] window = new float[windowSamples];
-        for (int i = 0; i < windowSamples; i++) {
-            int idx    = windowStart + i;
-            int lo     = raw[idx * 2]     & 0xFF;
-            int hi     = raw[idx * 2 + 1];
-            window[i]  = ((hi << 8) | lo) / 32768.0f;
+        // Use readWindow to copy only the needed samples into pre-allocated array
+        int copied = snapshotBuffer.readWindow(windowBytes, windowStart, windowSamples);
+        if (copied <= 0) {
+            return;
         }
 
-        double[] magnitudes = computeFft(window, windowSamples);
+        // Convert 16-bit signed little-endian PCM to normalised floats in pre-allocated array
+        for (int i = 0; i < copied; i++) {
+            int lo     = windowBytes[i * 2]     & 0xFF;
+            int hi     = windowBytes[i * 2 + 1];
+            fftWindow[i]  = ((hi << 8) | lo) / 32768.0f;
+        }
+
+        double[] magnitudes = computeFft(fftWindow, copied);
         if (magnitudes == null) {
             return;
         }
@@ -203,7 +215,7 @@ public class DspConsumerThread {
 
         final double[] mag   = magnitudes;
         final float    rate  = sampleRate;
-        final int      fftSz = nextPowerOfTwo(windowSamples);
+        final int      fftSz = nextPowerOfTwo(copied);
         final boolean  play  = isPlaying;
 
         SwingUtilities.invokeLater(() -> {
@@ -220,6 +232,7 @@ public class DspConsumerThread {
 
     /**
      * Computes the FFT magnitude spectrum for the given floating-point window.
+     * Reuses the pre-allocated {@link #fftSignal} array.
      *
      * @param window samples in the window (normalized)
      * @param count  number of valid samples in {@code window}
@@ -228,11 +241,15 @@ public class DspConsumerThread {
     private double[] computeFft(float[] window, int count) {
         try {
             int fftSize = nextPowerOfTwo(count);
-            double[] signal = new double[fftSize];
-            for (int i = 0; i < count; i++) {
-                signal[i] = window[i];
+
+            // Clear and fill the pre-allocated signal array
+            for (int i = 0; i < fftSize; i++) {
+                fftSignal[i] = (i < count) ? window[i] : 0.0;
             }
-            FastFourier fft = new FastFourier(signal);
+
+            // FastFourier requires a new instance per transform as it stores
+            // the signal internally, but we avoid allocating the input array
+            FastFourier fft = new FastFourier(fftSignal);
             fft.transform();
             return fft.getMagnitude(false);
         } catch (Exception e) {

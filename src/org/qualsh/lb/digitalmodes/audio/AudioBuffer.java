@@ -99,6 +99,98 @@ public class AudioBuffer {
     }
 
     /**
+     * Appends a chunk of audio data to the end of the buffer.
+     *
+     * <p>Used by the streaming pipeline's {@link AudioConsumer} to build up
+     * audio incrementally instead of loading the entire file at once.
+     * On the first call after a {@link #clear()}, the sample rate is set.
+     *
+     * @param chunk      the audio bytes to append; must not be {@code null}
+     * @param offset     start position in {@code chunk}
+     * @param length     number of bytes to append from {@code chunk}
+     * @param sampleRate the sample rate of the incoming audio
+     */
+    public void appendChunk(byte[] chunk, int offset, int length, float sampleRate) {
+        lock.writeLock().lock();
+        try {
+            int oldLen = this.samples.length;
+            byte[] grown = new byte[oldLen + length];
+            System.arraycopy(this.samples, 0, grown, 0, oldLen);
+            System.arraycopy(chunk, offset, grown, oldLen, length);
+            this.samples = grown;
+            this.sampleRate = sampleRate;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Copies a window of audio samples into a pre-allocated destination array.
+     *
+     * <p>Only the requested range is copied — not the entire buffer. This is
+     * far more efficient than {@link #getSamples()} when only a small FFT
+     * window is needed.
+     *
+     * @param dest        destination byte array; must have room for
+     *                    {@code sampleCount * 2} bytes starting at index 0
+     * @param sampleStart the first sample index to copy (not byte index)
+     * @param sampleCount the number of samples to copy
+     * @return the number of samples actually copied (may be less than requested
+     *         if the buffer is shorter)
+     */
+    public int readWindow(byte[] dest, int sampleStart, int sampleCount) {
+        lock.readLock().lock();
+        try {
+            if (samples == null || samples.length == 0) {
+                return 0;
+            }
+            int totalSamples = samples.length / 2;
+            int start = Math.max(0, Math.min(sampleStart, totalSamples));
+            int count = Math.min(sampleCount, totalSamples - start);
+            if (count <= 0) {
+                return 0;
+            }
+            System.arraycopy(samples, start * 2, dest, 0, count * 2);
+            return count;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns a direct reference to the internal sample array without copying.
+     *
+     * <p><strong>Warning:</strong> the returned array must be treated as
+     * read-only. It may be replaced at any time by a concurrent
+     * {@link #load(byte[], float)} or {@link #appendChunk} call. Use this
+     * only on hot paths where copying would be too expensive.
+     *
+     * @return the internal sample array; never {@code null}
+     */
+    public byte[] getSamplesRef() {
+        lock.readLock().lock();
+        try {
+            return samples != null ? samples : new byte[0];
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns the length of the internal sample array in bytes without copying.
+     *
+     * @return byte length of stored audio; {@code 0} when empty
+     */
+    public int getLength() {
+        lock.readLock().lock();
+        try {
+            return samples != null ? samples.length : 0;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
      * Returns {@code true} if no audio has been loaded yet, or if the audio has been cleared.
      *
      * @return {@code true} when no audio is available
