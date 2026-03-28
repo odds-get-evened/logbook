@@ -233,12 +233,20 @@ public class AudioConsumer implements Runnable {
                 if (bytesRead == 0) {
                     // Ring buffer is closed (EOF from producer)
                     if (looping && playbackActive) {
-                        // Re-load the file and continue
+                        // Re-load the file and continue from the beginning
                         eofReached = false;
-                        ringBuffer.reset();
                         decoderBuffer.clear();
                         playbackPositionSamples = 0;
-                        // Producer will detect fileReady and resume reading
+                        PlaybackController pc = playbackController;
+                        if (pc != null) {
+                            pc.setPlaybackPositionSamples(0);
+                        }
+                        try {
+                            producer.reloadFile();
+                        } catch (Exception e) {
+                            // If reload fails, stop looping gracefully
+                            playbackActive = false;
+                        }
                         continue;
                     }
                     // Not looping — wait for a new file to be loaded

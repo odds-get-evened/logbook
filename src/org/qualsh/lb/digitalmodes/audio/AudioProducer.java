@@ -37,6 +37,7 @@ public class AudioProducer implements Runnable {
     private volatile boolean stopped;
     private volatile boolean paused;
     private volatile boolean fileReady;
+    private volatile File lastLoadedFile;
 
     /**
      * Creates a new audio producer that writes into the given ring buffer.
@@ -65,6 +66,7 @@ public class AudioProducer implements Runnable {
         streamLock.lock();
         try {
             closeCurrentStream();
+            lastLoadedFile = file;
             ringBuffer.reset();
             AudioInputStream ais = AudioSystem.getAudioInputStream(file);
             currentFormat = ais.getFormat();
@@ -72,6 +74,20 @@ public class AudioProducer implements Runnable {
             fileReady = true;
         } finally {
             streamLock.unlock();
+        }
+    }
+
+    /**
+     * Re-opens the last loaded file from the beginning. Used by the consumer
+     * thread to restart playback when looping is enabled.
+     *
+     * @throws IOException                   if the file cannot be read
+     * @throws UnsupportedAudioFileException if the file format is not supported
+     */
+    public void reloadFile() throws IOException, UnsupportedAudioFileException {
+        File file = lastLoadedFile;
+        if (file != null) {
+            loadFile(file);
         }
     }
 
