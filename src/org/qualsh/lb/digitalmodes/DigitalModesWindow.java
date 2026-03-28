@@ -50,7 +50,7 @@ public class DigitalModesWindow extends JDialog {
 
     private static final long serialVersionUID = 1L;
 
-    private static final String WINDOW_TITLE      = "Digital Modes";
+    private static final String WINDOW_TITLE       = "Digital Modes";
     private static final int    DECODE_INTERVAL_MS = 500;
 
     // -------------------------------------------------------------------------
@@ -78,6 +78,7 @@ public class DigitalModesWindow extends JDialog {
     private PlaybackController playbackController;
     private WavFileSource      wavFileSource;
     private RigAudioSource     rigAudioSource;
+    private DspConsumerThread  dspConsumerThread;
 
     // -------------------------------------------------------------------------
     // Decode infrastructure
@@ -137,13 +138,12 @@ public class DigitalModesWindow extends JDialog {
         decodeLogModel = new DecodeLogModel();
         decodeLogTable = new DecodeLogTable(decodeLogModel);
 
-        fftPanel = new FFTPanel();
-        fftPanel.setBuffer(sharedBuffer);
-        fftPanel.setPlaybackController(playbackController);
-
+        fftPanel       = new FFTPanel();
         waterfallPanel = new WaterfallPanel();
-        waterfallPanel.setBuffer(sharedBuffer);
-        waterfallPanel.setPlaybackController(playbackController);
+
+        // The DspConsumerThread owns all FFT/waterfall computation off the EDT.
+        dspConsumerThread = new DspConsumerThread(
+                sharedBuffer, playbackController, fftPanel, waterfallPanel);
 
         frequencySelector  = new FrequencySelector();
         audioControlPanel  = new AudioControlPanel();
@@ -230,13 +230,13 @@ public class DigitalModesWindow extends JDialog {
      *
      * <p>Connections established:
      * <ul>
-     *   <li>Audio buffer changes refresh the spectrum panels, stop playback,
-     *       and log a status message.</li>
+     *   <li>Audio buffer changes stop playback and log a status message.</li>
      *   <li>Frequency selector changes are echoed to the decode text area.</li>
      *   <li>Mode selection changes update the frequency markers, the shared
      *       buffer's associated mode, and the active decoder.</li>
      *   <li>Audio control button clicks are forwarded to the appropriate
-     *       audio infrastructure objects.</li>
+     *       audio infrastructure objects; file upload and recording completion
+     *       also clear the waterfall so stale history is not shown.</li>
      *   <li>Decode log row selections display the full decoded text as a
      *       tooltip on the table.</li>
      * </ul>
@@ -290,6 +290,7 @@ public class DigitalModesWindow extends JDialog {
                             get();
                             AudioBuffer fb = wavFileSource.getBuffer();
                             sharedBuffer.load(fb.getSamples(), fb.getSampleRate());
+                            waterfallPanel.clearWaterfall();
                             decodeTextArea.appendText("--- File loaded: " + file.getName() + " ---\n");
                             audioControlPanel.getStatusLabel().setText(file.getName());
                         } catch (Exception ex) {
@@ -325,6 +326,7 @@ public class DigitalModesWindow extends JDialog {
                             get();
                             AudioBuffer fb = wavFileSource.getBuffer();
                             sharedBuffer.load(fb.getSamples(), fb.getSampleRate());
+                            waterfallPanel.clearWaterfall();
                             decodeTextArea.appendText("--- Recording loaded ---\n");
                         } catch (Exception ex) {
                             decodeTextArea.appendText("--- Stop record error: " + ex.getMessage() + " ---\n");
@@ -493,14 +495,18 @@ public class DigitalModesWindow extends JDialog {
      * spectrum display.
      *
      * <p>The rig source is not started automatically — call {@link RigAudioSource#start()} on
-     * it when you are ready to begin receiving audio.
+     * it when you are ready to begin receiving audio. The DSP consumer thread is switched to
+     * ring-buffer mode so the spectrum display updates from live data continuously.
      *
      * @param source the rig audio source to connect; must not be {@code null}
      */
     public void setRigAudioSource(RigAudioSource source) {
         this.rigAudioSource = source;
+        // Mirror decoder-path snapshot updates to the shared buffer.
         source.getBuffer().addListener(buffer ->
                 sharedBuffer.load(buffer.getSamples(), buffer.getSampleRate()));
+        // Point the DSP consumer at the live ring buffer for real-time display.
+        dspConsumerThread.setRingBuffer(source.getRingBuffer());
     }
 
     /**
@@ -512,6 +518,7 @@ public class DigitalModesWindow extends JDialog {
     public void openWindow() {
         setVisible(true);
         requestFocus();
+        dspConsumerThread.start();
         decodeTextArea.appendText("--- Digital Modes Ready ---\n");
     }
 
@@ -525,10 +532,12 @@ public class DigitalModesWindow extends JDialog {
         if (decodeTimer != null) {
             decodeTimer.stop();
         }
+        dspConsumerThread.stop();
         playbackController.stop();
         if (rigAudioSource != null && rigAudioSource.isActive()) {
             rigAudioSource.stop();
         }
+        dspConsumerThread.setRingBuffer(null);
         setVisible(false);
     }
 }

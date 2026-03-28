@@ -1,10 +1,5 @@
 package org.qualsh.lb.digitalmodes.spectrum;
 
-import com.github.psambit9791.jdsp.transform.FastFourier;
-import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
-import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
-import org.qualsh.lb.digitalmodes.audio.PlaybackController;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -15,23 +10,21 @@ import java.awt.image.BufferedImage;
  * <p>The waterfall shows frequency on the horizontal axis and time on the vertical axis, with
  * the newest row always at the top and older rows scrolling downward. Pixel colour encodes
  * signal strength, ranging from black (no signal) through dark blue and cyan to yellow and
- * white (strongest signal). The display updates approximately 10 times per second.
+ * white (strongest signal).
  *
- * <p>Connect the panel to the application's audio using {@link #setBuffer(AudioBuffer)}.
- * The waterfall will automatically scroll and update whenever the audio changes.
+ * <p>This panel is a passive display: it does not perform any FFT computation itself.
+ * New spectrum rows are pushed in via {@link #appendRow(double[])}, and the waterfall history
+ * can be cleared via {@link #clearWaterfall()}.  Both methods must be called on the Event
+ * Dispatch Thread (typically via {@link SwingUtilities#invokeLater(Runnable)} from the
+ * {@code DspConsumerThread}).
  *
  * @author Logbook Development Team
  * @version 1.0
  */
-public class WaterfallPanel extends JPanel implements AudioBufferListener {
+public class WaterfallPanel extends JPanel {
 
-    private AudioBuffer buffer;
-    private PlaybackController playbackController;
     private BufferedImage waterfallImage;
-    private Timer refreshTimer;
 
-    private static final int   REFRESH_RATE_MS  = 100;
-    private static final int   WINDOW_SAMPLES   = 4096;
     private static final int   PREFERRED_HEIGHT  = 200;
     private static final Color BACKGROUND_COLOR  = Color.BLACK;
     private static final Color LABEL_COLOR       = Color.LIGHT_GRAY;
@@ -41,18 +34,15 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new waterfall display panel. Call {@link #setBuffer(AudioBuffer)} to connect
-     * audio data so the waterfall has something to show.
+     * Creates a new waterfall display panel.
+     *
+     * <p>The waterfall is initially blank.  Call {@link #appendRow(double[])} to begin
+     * adding spectrum rows, or {@link #clearWaterfall()} to blank it at any time.
      */
     public WaterfallPanel() {
         setPreferredSize(new Dimension(800, PREFERRED_HEIGHT));
         setBackground(BACKGROUND_COLOR);
         waterfallImage = new BufferedImage(800, PREFERRED_HEIGHT, BufferedImage.TYPE_INT_RGB);
-        refreshTimer = new Timer(REFRESH_RATE_MS, e -> {
-            scrollAndUpdate();
-            repaint();
-        });
-        refreshTimer.start();
     }
 
     // -------------------------------------------------------------------------
@@ -60,113 +50,16 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Connects this waterfall display to the given playback controller so rows are only added
-     * during active playback, tracking the current position in the audio.
+     * Scrolls the waterfall down by one pixel and paints a new top row derived from
+     * the supplied FFT magnitude array.
      *
-     * @param playbackController the playback controller; may be {@code null} to disconnect
+     * <p>Must be called on the Event Dispatch Thread.  Has no effect if
+     * {@code magnitudes} is {@code null} or empty.
+     *
+     * @param magnitudes the FFT magnitude array for the new row; must not be {@code null}
      */
-    public void setPlaybackController(PlaybackController playbackController) {
-        this.playbackController = playbackController;
-    }
-
-    /**
-     * Connects this waterfall display to the given audio buffer.
-     *
-     * <p>The waterfall immediately begins scrolling new rows based on audio from the new buffer.
-     * Passing {@code null} disconnects the display and stops the waterfall from updating.
-     *
-     * @param buffer the audio buffer to display, or {@code null} to disconnect
-     */
-    public void setBuffer(AudioBuffer buffer) {
-        if (this.buffer != null) {
-            this.buffer.removeListener(this);
-        }
-        this.buffer = buffer;
-        if (buffer != null) {
-            buffer.addListener(this);
-        }
-    }
-
-    /**
-     * Called automatically when the connected audio buffer is loaded or cleared.
-     *
-     * <p>The waterfall picks up the new audio on the next refresh tick. You do not need to
-     * call this method directly.
-     *
-     * @param buffer the buffer whose content changed; never {@code null}
-     */
-    @Override
-    public void onBufferChanged(AudioBuffer buffer) {
-        // Clear the waterfall so stale history from a previous file is not shown.
-        if (waterfallImage != null) {
-            Graphics2D g2 = waterfallImage.createGraphics();
-            g2.setColor(BACKGROUND_COLOR);
-            g2.fillRect(0, 0, waterfallImage.getWidth(), waterfallImage.getHeight());
-            g2.dispose();
-        }
-        repaint();
-    }
-
-    /**
-     * Scrolls the waterfall image down and adds a new row at the top based on the current
-     * audio spectrum.
-     *
-     * <p>This method is called automatically on each refresh tick. If no audio is loaded,
-     * it returns immediately without modifying the waterfall image.
-     */
-    public void scrollAndUpdate() {
-        if (buffer == null || buffer.isEmpty()) {
-            return;
-        }
-
-        // Only add new rows while audio is actively playing.
-        if (playbackController == null || !playbackController.isPlaying()) {
-            return;
-        }
-
-        int playbackPos = playbackController.getPlaybackPositionSamples();
-
-        double[] magnitudes;
-        try {
-            byte[] raw = buffer.getSamples();
-            int numSamples = raw.length / 2; // 16-bit mono: 2 bytes per sample
-
-            // Use a fixed window of up to WINDOW_SAMPLES at the current playback
-            // position, shifted back if necessary to stay within bounds.
-            int windowStart = playbackPos;
-            if (windowStart + WINDOW_SAMPLES > numSamples) {
-                windowStart = Math.max(0, numSamples - WINDOW_SAMPLES);
-            }
-            int windowSamples = Math.min(WINDOW_SAMPLES, numSamples - windowStart);
-            if (windowSamples <= 0) {
-                return;
-            }
-
-            // Convert 16-bit signed little-endian PCM to normalised doubles.
-            double[] pcm = new double[windowSamples];
-            for (int i = 0; i < windowSamples; i++) {
-                int idx    = windowStart + i;
-                int lo     = raw[idx * 2]     & 0xFF; // unsigned low byte
-                int hi     = raw[idx * 2 + 1];        // signed high byte
-                int sample = (hi << 8) | lo;
-                pcm[i] = sample / 32768.0;
-            }
-
-            // Pad to next power of two (required for efficient FFT).
-            int fftSize = 1;
-            while (fftSize < windowSamples) fftSize <<= 1;
-
-            double[] signal = new double[fftSize];
-            System.arraycopy(pcm, 0, signal, 0, windowSamples);
-
-            FastFourier fft = new FastFourier(signal);
-            fft.transform();
-            magnitudes = fft.getMagnitude(false);
-        } catch (Exception e) {
-            return;
-        }
-
-        if (magnitudes.length == 0) {
+    public void appendRow(double[] magnitudes) {
+        if (magnitudes == null || magnitudes.length == 0) {
             return;
         }
 
@@ -174,12 +67,11 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
         int imgH = waterfallImage.getHeight();
 
         // Scroll the existing image down by one pixel.
-        // Iterate from bottom to top to avoid overwriting source rows before
-        // they have been copied (source and destination are the same image).
+        // Iterate bottom-to-top to avoid overwriting source rows before they are copied.
         int[] rowBuf = new int[imgW];
         for (int y = imgH - 1; y > 0; y--) {
             waterfallImage.getRGB(0, y - 1, imgW, 1, rowBuf, 0, imgW);
-            waterfallImage.setRGB(0, y, imgW, 1, rowBuf, 0, imgW);
+            waterfallImage.setRGB(0, y,     imgW, 1, rowBuf, 0, imgW);
         }
 
         // Find peak magnitude for normalisation; guard against all-zero input.
@@ -191,13 +83,30 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
         // Paint the new top row.
         int n = magnitudes.length;
         for (int x = 0; x < imgW; x++) {
-            // Map pixel column to the nearest magnitude bin.
             int binIdx = (int) ((double) x / (imgW - 1) * (n - 1));
             binIdx = Math.max(0, Math.min(binIdx, n - 1));
             double normalised = magnitudes[binIdx] / maxMag;
             Color c = magnitudeToColor(normalised);
             waterfallImage.setRGB(x, 0, c.getRGB());
         }
+
+        repaint();
+    }
+
+    /**
+     * Clears the waterfall display to a blank (black) state.
+     *
+     * <p>Must be called on the Event Dispatch Thread.  Typically called when a new audio
+     * source is loaded so that stale history from a previous file is not shown.
+     */
+    public void clearWaterfall() {
+        if (waterfallImage != null) {
+            Graphics2D g2 = waterfallImage.createGraphics();
+            g2.setColor(BACKGROUND_COLOR);
+            g2.fillRect(0, 0, waterfallImage.getWidth(), waterfallImage.getHeight());
+            g2.dispose();
+        }
+        repaint();
     }
 
     /**
@@ -308,9 +217,9 @@ public class WaterfallPanel extends JPanel implements AudioBufferListener {
             if (t >= lo && t <= hi) {
                 double f = (t - lo) / (hi - lo);
                 int r = (int) Math.round(stops[i][1] + f * (stops[i + 1][1] - stops[i][1]));
-                int g = (int) Math.round(stops[i][2] + f * (stops[i + 1][2] - stops[i][2]));
+                int gVal = (int) Math.round(stops[i][2] + f * (stops[i + 1][2] - stops[i][2]));
                 int b = (int) Math.round(stops[i][3] + f * (stops[i + 1][3] - stops[i][3]));
-                return new Color(r, g, b);
+                return new Color(r, gVal, b);
             }
         }
 

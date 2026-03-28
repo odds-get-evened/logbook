@@ -1,10 +1,5 @@
 package org.qualsh.lb.digitalmodes.spectrum;
 
-import com.github.psambit9791.jdsp.transform.FastFourier;
-import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
-import org.qualsh.lb.digitalmodes.audio.AudioBuffer.AudioBufferListener;
-import org.qualsh.lb.digitalmodes.audio.PlaybackController;
-
 import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.AffineTransform;
@@ -13,53 +8,45 @@ import java.awt.geom.AffineTransform;
  * Displays a live frequency spectrum graph of the loaded audio.
  *
  * <p>The spectrum panel shows signal strength on the vertical axis and frequency in Hz on the
- * horizontal axis, with a green trace on a dark background. It updates approximately 10 times
- * per second. When no audio is loaded, the panel shows "No Signal".
+ * horizontal axis, with a green trace on a dark background.  When no data has been received
+ * the panel shows "No Signal".
  *
- * <p>Connect the panel to the application's audio using {@link #setBuffer(AudioBuffer)}.
- * The display will automatically refresh whenever the audio changes.
+ * <p>This panel is a passive display: it does not perform any FFT computation itself.
+ * All spectrum data is pushed in from the outside via {@link #setMagnitudes(double[], float, int)},
+ * which must be called on the Event Dispatch Thread (typically via
+ * {@link SwingUtilities#invokeLater(Runnable)} from the {@code DspConsumerThread}).
  *
  * @author Logbook Development Team
  * @version 1.0
  */
-public class FFTPanel extends JPanel implements AudioBufferListener {
+public class FFTPanel extends JPanel {
 
-    private AudioBuffer buffer;
-    private PlaybackController playbackController;
     private double[] magnitudes;
-    private Timer refreshTimer;
 
-    private static final int    REFRESH_RATE_MS  = 100;
-    private static final int    MAX_FFT_SAMPLES  = 4096;
     private static final Color  BACKGROUND_COLOR = Color.BLACK;
     private static final Color  TRACE_COLOR      = new Color(0, 200, 0);
     private static final Color  GRID_COLOR       = new Color(40, 40, 40);
     private static final Color  LABEL_COLOR      = Color.LIGHT_GRAY;
     private static final int    PADDING          = 30;
 
-    // Cached when updateMagnitudes() runs; used by paintComponent() for Hz labels.
-    private float cachedSampleRate    = 0f;
-    private int   cachedFFTSize       = 0;
-    // Skip recomputing FFT when the playback position has not changed.
-    private int   lastComputedPosition = -1;
+    // Supplied by setMagnitudes(); used by paintComponent() for Hz axis labels.
+    private float cachedSampleRate = 0f;
+    private int   cachedFFTSize    = 0;
 
     // -------------------------------------------------------------------------
     // Construction
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new spectrum display panel. Call {@link #setBuffer(AudioBuffer)} to connect
-     * audio data so the display has something to show.
+     * Creates a new spectrum display panel.
+     *
+     * <p>The panel shows "No Signal" until the first call to
+     * {@link #setMagnitudes(double[], float, int)}.
      */
     public FFTPanel() {
         setPreferredSize(new Dimension(800, 150));
         setBackground(BACKGROUND_COLOR);
         magnitudes = new double[0];
-        refreshTimer = new Timer(REFRESH_RATE_MS, e -> {
-            updateMagnitudes();
-            repaint();
-        });
-        refreshTimer.start();
     }
 
     // -------------------------------------------------------------------------
@@ -67,113 +54,22 @@ public class FFTPanel extends JPanel implements AudioBufferListener {
     // -------------------------------------------------------------------------
 
     /**
-     * Connects this spectrum display to the given playback controller so the FFT window
-     * tracks the current playback position.
+     * Updates the displayed spectrum with new pre-computed FFT magnitudes.
      *
-     * @param playbackController the playback controller; may be {@code null} to disconnect
+     * <p>Must be called on the Event Dispatch Thread.  Pass an empty or {@code null}
+     * array to return the panel to its "No Signal" state.
+     *
+     * @param magnitudes the FFT magnitude array (half-spectrum); {@code null} is treated
+     *                   as an empty array
+     * @param sampleRate the sample rate of the source audio in Hz, used for frequency labels
+     * @param fftSize    the FFT window size used to produce {@code magnitudes}, used for
+     *                   frequency labels
      */
-    public void setPlaybackController(PlaybackController playbackController) {
-        this.playbackController = playbackController;
-    }
-
-    /**
-     * Connects this spectrum display to the given audio buffer.
-     *
-     * <p>The display immediately begins showing the spectrum of audio from the new buffer.
-     * Passing {@code null} disconnects the display and shows "No Signal".
-     *
-     * @param buffer the audio buffer to display, or {@code null} to disconnect
-     */
-    public void setBuffer(AudioBuffer buffer) {
-        if (this.buffer != null) {
-            this.buffer.removeListener(this);
-        }
-        this.buffer = buffer;
-        if (buffer != null) {
-            buffer.addListener(this);
-        }
+    public void setMagnitudes(double[] magnitudes, float sampleRate, int fftSize) {
+        this.magnitudes      = (magnitudes != null) ? magnitudes : new double[0];
+        this.cachedSampleRate = sampleRate;
+        this.cachedFFTSize    = fftSize;
         repaint();
-    }
-
-    /**
-     * Called automatically when the connected audio buffer is loaded or cleared.
-     *
-     * <p>The spectrum display immediately recalculates and shows the new audio on the
-     * next refresh. You do not need to call this method directly.
-     *
-     * @param buffer the buffer whose content changed; never {@code null}
-     */
-    @Override
-    public void onBufferChanged(AudioBuffer buffer) {
-        lastComputedPosition = -1; // Force recompute on next timer tick.
-        repaint();
-    }
-
-    /**
-     * Recalculates the frequency spectrum from the current audio buffer.
-     *
-     * <p>If the buffer is empty or absent the display will show "No Signal" on the next repaint.
-     * This method is called automatically on each refresh tick; you can also call it manually
-     * to force an immediate update.
-     */
-    public void updateMagnitudes() {
-        if (buffer == null || buffer.isEmpty()) {
-            magnitudes = new double[0];
-            return;
-        }
-
-        int currentPosition = (playbackController != null)
-                ? playbackController.getPlaybackPositionSamples()
-                : 0;
-
-        // Skip the FFT entirely when the playback position has not changed.
-        if (currentPosition == lastComputedPosition && magnitudes.length > 0) {
-            return;
-        }
-        lastComputedPosition = currentPosition;
-
-        try {
-            byte[] raw = buffer.getSamples();
-            int numSamples = raw.length / 2; // 16-bit mono: 2 bytes per sample
-
-            // Use a fixed window of up to MAX_FFT_SAMPLES starting at the current
-            // playback position, shifted back if necessary to stay within bounds.
-            int windowStart = currentPosition;
-            if (windowStart + MAX_FFT_SAMPLES > numSamples) {
-                windowStart = Math.max(0, numSamples - MAX_FFT_SAMPLES);
-            }
-            int windowSamples = Math.min(MAX_FFT_SAMPLES, numSamples - windowStart);
-            if (windowSamples <= 0) {
-                magnitudes = new double[0];
-                return;
-            }
-
-            // Convert 16-bit signed little-endian PCM to normalised doubles.
-            double[] pcm = new double[windowSamples];
-            for (int i = 0; i < windowSamples; i++) {
-                int idx    = windowStart + i;
-                int lo     = raw[idx * 2]     & 0xFF; // unsigned low byte
-                int hi     = raw[idx * 2 + 1];        // signed high byte
-                int sample = (hi << 8) | lo;
-                pcm[i] = sample / 32768.0;
-            }
-
-            // Pad to next power of two (required for efficient FFT).
-            int fftSize = 1;
-            while (fftSize < windowSamples) fftSize <<= 1;
-
-            double[] signal = new double[fftSize];
-            System.arraycopy(pcm, 0, signal, 0, windowSamples);
-
-            FastFourier fft = new FastFourier(signal);
-            fft.transform();
-            magnitudes = fft.getMagnitude(false);
-
-            cachedSampleRate = buffer.getSampleRate();
-            cachedFFTSize    = fftSize;
-        } catch (Exception e) {
-            magnitudes = new double[0];
-        }
     }
 
     /**

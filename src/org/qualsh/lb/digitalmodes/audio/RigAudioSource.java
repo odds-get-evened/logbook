@@ -2,7 +2,6 @@ package org.qualsh.lb.digitalmodes.audio;
 
 import com.fazecast.jSerialComm.*;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -14,6 +13,12 @@ import java.io.InputStream;
  * start streaming audio directly from your transceiver into the spectrum display and
  * decoder.
  *
+ * <p>Incoming audio is continuously written into a bounded {@link AudioRingBuffer}
+ * (capacity {@value #RING_CAPACITY_SAMPLES} samples, ~30 seconds at 8 kHz), preventing
+ * the unbounded memory growth that would occur with a naive accumulator.  The
+ * {@link AudioBuffer} snapshot (used by decoders that need a full signal block) is
+ * refreshed approximately once per second from the ring buffer contents.
+ *
  * <p>Audio arrives continuously while the connection is active. Call {@link #stop()}
  * to disconnect from the rig and release the USB port.
  *
@@ -22,16 +27,22 @@ import java.io.InputStream;
  */
 public class RigAudioSource implements AudioSource {
 
-    private static final int READ_BUFFER_SIZE = 4096;
+    private static final int  READ_BUFFER_SIZE      = 4096;
+    /** 30 seconds of audio at 8 kHz. */
+    private static final int  RING_CAPACITY_SAMPLES = 240_000;
+    /** Interval in milliseconds between AudioBuffer snapshot refreshes for the decoder path. */
+    private static final long SNAPSHOT_INTERVAL_MS  = 1_000;
 
     private String portName;
     private int baudRate;
     private float sampleRate = 8000.0f;
 
-    private final AudioBuffer buffer;
+    private final AudioBuffer    buffer;
+    private final AudioRingBuffer rigRingBuffer;
+
     private SerialPort serialPort;
-    private Thread captureThread;
-    private boolean active;
+    private Thread     captureThread;
+    private boolean    active;
 
     /**
      * Creates a new rig audio source targeting the given USB serial port.
@@ -44,10 +55,11 @@ public class RigAudioSource implements AudioSource {
      *                 example {@code 9600} or {@code 115200}
      */
     public RigAudioSource(String portName, int baudRate) {
-        this.portName = portName;
-        this.baudRate = baudRate;
-        this.buffer = new AudioBuffer();
-        this.active = false;
+        this.portName      = portName;
+        this.baudRate      = baudRate;
+        this.buffer        = new AudioBuffer();
+        this.rigRingBuffer = new AudioRingBuffer(RING_CAPACITY_SAMPLES, sampleRate);
+        this.active        = false;
     }
 
     /**
@@ -75,21 +87,39 @@ public class RigAudioSource implements AudioSource {
         active = true;
 
         captureThread = new Thread(() -> {
-            ByteArrayOutputStream accumulator = new ByteArrayOutputStream();
-            byte[] chunk = new byte[READ_BUFFER_SIZE];
-            InputStream in = serialPort.getInputStream();
+            byte[]      chunk         = new byte[READ_BUFFER_SIZE];
+            float[]     floatChunk    = new float[READ_BUFFER_SIZE / 2]; // 2 bytes per sample
+            InputStream in            = serialPort.getInputStream();
+            long        lastSnapshotMs = System.currentTimeMillis();
 
             try {
                 while (!Thread.currentThread().isInterrupted()) {
                     int bytesRead = in.read(chunk);
                     if (bytesRead > 0) {
-                        accumulator.write(chunk, 0, bytesRead);
-                        buffer.load(accumulator.toByteArray(), sampleRate);
+                        // Convert 16-bit signed little-endian PCM bytes to normalised floats.
+                        int sampleCount = bytesRead / 2;
+                        for (int i = 0; i < sampleCount; i++) {
+                            int lo     = chunk[i * 2]     & 0xFF;
+                            int hi     = chunk[i * 2 + 1];
+                            int raw    = (hi << 8) | lo;
+                            floatChunk[i] = raw / 32768.0f;
+                        }
+                        rigRingBuffer.write(floatChunk, sampleCount);
+
+                        // Refresh the AudioBuffer snapshot approximately once per second
+                        // so that decoders (which need a complete signal block) stay current.
+                        long now = System.currentTimeMillis();
+                        if (now - lastSnapshotMs >= SNAPSHOT_INTERVAL_MS) {
+                            byte[] pcm = rigRingBuffer.snapshotAsPcm(rigRingBuffer.available());
+                            buffer.load(pcm, sampleRate);
+                            lastSnapshotMs = now;
+                        }
                     }
                 }
             } catch (IOException e) {
                 if (!Thread.currentThread().isInterrupted()) {
-                    System.err.println("RigAudioSource: read error on " + portName + ": " + e.getMessage());
+                    System.err.println("RigAudioSource: read error on " + portName
+                            + ": " + e.getMessage());
                 }
             }
         }, "rig-audio-capture");
@@ -136,13 +166,28 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Returns the audio buffer that receives the live audio from the rig.
+     * Returns the AudioBuffer snapshot used by the decoder path.
      *
-     * @return the buffer; never {@code null}
+     * <p>The snapshot is refreshed from the ring buffer approximately once per second
+     * during active capture. For real-time spectrum display, prefer {@link #getRingBuffer()}.
+     *
+     * @return the snapshot buffer; never {@code null}
      */
     @Override
     public AudioBuffer getBuffer() {
         return buffer;
+    }
+
+    /**
+     * Returns the bounded ring buffer that receives continuous live audio from the rig.
+     *
+     * <p>The DSP consumer thread reads from this ring buffer to drive the spectrum
+     * display and waterfall without copying unbounded data.
+     *
+     * @return the ring buffer; never {@code null}
+     */
+    public AudioRingBuffer getRingBuffer() {
+        return rigRingBuffer;
     }
 
     /**
@@ -201,7 +246,7 @@ public class RigAudioSource implements AudioSource {
     }
 
     /**
-     * Sets the sample rate used when loading rig audio into the buffer.
+     * Sets the sample rate used when loading rig audio into the ring buffer and snapshot.
      *
      * <p>This may be changed at any time, even while capture is active.
      * The new rate takes effect on the next audio update.
@@ -210,6 +255,7 @@ public class RigAudioSource implements AudioSource {
      */
     public void setSampleRate(float sampleRate) {
         this.sampleRate = sampleRate;
+        rigRingBuffer.setSampleRate(sampleRate);
     }
 
     /**
