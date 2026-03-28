@@ -2,9 +2,10 @@ package org.qualsh.lb.digitalmodes.audio;
 
 import org.qualsh.lb.digital.DigitalMode;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * The application's audio memory — it holds whatever audio is currently loaded,
@@ -27,6 +28,7 @@ public class AudioBuffer {
     private float sampleRate;
     private DigitalMode associatedMode;
     private final List<AudioBufferListener> listeners;
+    private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
      * Notified whenever the audio held in the application's memory is replaced or cleared.
@@ -51,7 +53,7 @@ public class AudioBuffer {
         this.samples = new byte[0];
         this.sampleRate = 0.0f;
         this.associatedMode = null;
-        this.listeners = new ArrayList<>();
+        this.listeners = new CopyOnWriteArrayList<>();
     }
 
     /**
@@ -69,8 +71,13 @@ public class AudioBuffer {
         if (samples == null) {
             throw new IllegalArgumentException("samples must not be null");
         }
-        this.samples = Arrays.copyOf(samples, samples.length);
-        this.sampleRate = sampleRate;
+        lock.writeLock().lock();
+        try {
+            this.samples = Arrays.copyOf(samples, samples.length);
+            this.sampleRate = sampleRate;
+        } finally {
+            lock.writeLock().unlock();
+        }
         notifyListeners();
     }
 
@@ -81,8 +88,13 @@ public class AudioBuffer {
      * After this call, {@link #isEmpty()} returns {@code true}.
      */
     public void clear() {
-        this.samples = new byte[0];
-        this.sampleRate = 0.0f;
+        lock.writeLock().lock();
+        try {
+            this.samples = new byte[0];
+            this.sampleRate = 0.0f;
+        } finally {
+            lock.writeLock().unlock();
+        }
         notifyListeners();
     }
 
@@ -92,7 +104,12 @@ public class AudioBuffer {
      * @return {@code true} when no audio is available
      */
     public boolean isEmpty() {
-        return samples == null || samples.length == 0;
+        lock.readLock().lock();
+        try {
+            return samples == null || samples.length == 0;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
@@ -104,10 +121,15 @@ public class AudioBuffer {
      * @return a copy of the stored audio bytes; never {@code null}
      */
     public byte[] getSamples() {
-        if (samples == null) {
-            return new byte[0];
+        lock.readLock().lock();
+        try {
+            if (samples == null) {
+                return new byte[0];
+            }
+            return Arrays.copyOf(samples, samples.length);
+        } finally {
+            lock.readLock().unlock();
         }
-        return Arrays.copyOf(samples, samples.length);
     }
 
     /**
@@ -119,7 +141,12 @@ public class AudioBuffer {
      * @return samples per second; {@code 0.0f} when no audio is loaded
      */
     public float getSampleRate() {
-        return sampleRate;
+        lock.readLock().lock();
+        try {
+            return sampleRate;
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     /**
@@ -130,11 +157,16 @@ public class AudioBuffer {
      * @return duration in seconds, or {@code 0.0} if no audio is loaded
      */
     public double getDurationSeconds() {
-        if (isEmpty() || sampleRate == 0.0f) {
-            return 0.0;
+        lock.readLock().lock();
+        try {
+            if (samples == null || samples.length == 0 || sampleRate == 0.0f) {
+                return 0.0;
+            }
+            int numSamples = samples.length / 2; // 16-bit mono: 2 bytes per sample
+            return numSamples / (double) sampleRate;
+        } finally {
+            lock.readLock().unlock();
         }
-        int numSamples = samples.length / 2; // 16-bit mono: 2 bytes per sample
-        return numSamples / (double) sampleRate;
     }
 
     /**
