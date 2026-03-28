@@ -16,6 +16,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * replaces whatever was there before. The spectrum display and all decoders read
  * directly from this buffer, so any change here is immediately reflected on screen.
  *
+ * <p>Internally the buffer uses a geometrically-growing backing array (doubling
+ * strategy, starting at 64 KB) so that streaming playback appends chunks with
+ * at most O(log n) array copies instead of one full copy per chunk.
+ *
  * <p>Any part of the application that needs to know when audio changes can
  * register as a listener via {@link #addListener(AudioBufferListener)}.
  *
@@ -24,7 +28,18 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class AudioBuffer {
 
-    private byte[] samples;
+    /** Initial backing-array capacity in bytes (64 KB). */
+    private static final int INITIAL_CAPACITY = 65536;
+
+    /**
+     * Backing store. May be larger than {@link #size}; only bytes
+     * {@code [0, size)} contain valid audio data.
+     */
+    private byte[] buf;
+
+    /** Number of valid audio bytes currently held in {@link #buf}. */
+    private int size;
+
     private float sampleRate;
     private DigitalMode associatedMode;
     private final List<AudioBufferListener> listeners;
@@ -50,10 +65,11 @@ public class AudioBuffer {
      * Creates a new, empty audio buffer with no audio loaded and no listeners registered.
      */
     public AudioBuffer() {
-        this.samples = new byte[0];
+        this.buf        = new byte[INITIAL_CAPACITY];
+        this.size       = 0;
         this.sampleRate = 0.0f;
         this.associatedMode = null;
-        this.listeners = new CopyOnWriteArrayList<>();
+        this.listeners  = new CopyOnWriteArrayList<>();
     }
 
     /**
@@ -73,7 +89,8 @@ public class AudioBuffer {
         }
         lock.writeLock().lock();
         try {
-            this.samples = Arrays.copyOf(samples, samples.length);
+            buf        = Arrays.copyOf(samples, samples.length);
+            size       = samples.length;
             this.sampleRate = sampleRate;
         } finally {
             lock.writeLock().unlock();
@@ -90,8 +107,9 @@ public class AudioBuffer {
     public void clear() {
         lock.writeLock().lock();
         try {
-            this.samples = new byte[0];
-            this.sampleRate = 0.0f;
+            buf        = new byte[INITIAL_CAPACITY];
+            size       = 0;
+            sampleRate = 0.0f;
         } finally {
             lock.writeLock().unlock();
         }
@@ -101,9 +119,10 @@ public class AudioBuffer {
     /**
      * Appends a chunk of audio data to the end of the buffer.
      *
-     * <p>Used by the streaming pipeline's {@link AudioConsumer} to build up
-     * audio incrementally instead of loading the entire file at once.
-     * On the first call after a {@link #clear()}, the sample rate is set.
+     * <p>Uses a geometrically-growing (doubling) backing array so that streaming
+     * a long WAV file requires only O(log n) array copies across all chunks, rather
+     * than one full copy per chunk. On the first call after a {@link #clear()}, the
+     * sample rate is set.
      *
      * @param chunk      the audio bytes to append; must not be {@code null}
      * @param offset     start position in {@code chunk}
@@ -113,11 +132,19 @@ public class AudioBuffer {
     public void appendChunk(byte[] chunk, int offset, int length, float sampleRate) {
         lock.writeLock().lock();
         try {
-            int oldLen = this.samples.length;
-            byte[] grown = new byte[oldLen + length];
-            System.arraycopy(this.samples, 0, grown, 0, oldLen);
-            System.arraycopy(chunk, offset, grown, oldLen, length);
-            this.samples = grown;
+            int required = size + length;
+            if (required > buf.length) {
+                // Double until large enough — at most O(log n) copies across all appends
+                int newCapacity = buf.length == 0 ? INITIAL_CAPACITY : buf.length;
+                while (newCapacity < required) {
+                    newCapacity <<= 1;
+                }
+                byte[] grown = new byte[newCapacity];
+                System.arraycopy(buf, 0, grown, 0, size);
+                buf = grown;
+            }
+            System.arraycopy(chunk, offset, buf, size, length);
+            size += length;
             this.sampleRate = sampleRate;
         } finally {
             lock.writeLock().unlock();
@@ -141,16 +168,16 @@ public class AudioBuffer {
     public int readWindow(byte[] dest, int sampleStart, int sampleCount) {
         lock.readLock().lock();
         try {
-            if (samples == null || samples.length == 0) {
+            if (size == 0) {
                 return 0;
             }
-            int totalSamples = samples.length / 2;
+            int totalSamples = size / 2;
             int start = Math.max(0, Math.min(sampleStart, totalSamples));
             int count = Math.min(sampleCount, totalSamples - start);
             if (count <= 0) {
                 return 0;
             }
-            System.arraycopy(samples, start * 2, dest, 0, count * 2);
+            System.arraycopy(buf, start * 2, dest, 0, count * 2);
             return count;
         } finally {
             lock.readLock().unlock();
@@ -158,33 +185,68 @@ public class AudioBuffer {
     }
 
     /**
-     * Returns a direct reference to the internal sample array without copying.
+     * Returns a copy of the most-recent portion of the audio, up to {@code maxBytes} bytes.
      *
-     * <p><strong>Warning:</strong> the returned array must be treated as
-     * read-only. It may be replaced at any time by a concurrent
-     * {@link #load(byte[], float)} or {@link #appendChunk} call. Use this
-     * only on hot paths where copying would be too expensive.
+     * <p>Use this in decoders instead of {@link #getSamples()} to avoid copying the
+     * entire accumulated buffer on every decode tick. Pass the number of bytes that
+     * covers the decoder's maximum analysis window — for example,
+     * {@code (int)(15.0f * getSampleRate()) * 2} for a 15-second FT8 window at whatever
+     * sample rate is currently loaded.
      *
-     * @return the internal sample array; never {@code null}
+     * <p>If the buffer holds less audio than requested, all available audio is returned.
+     * Returns an empty array when the buffer is empty.
+     *
+     * @param maxBytes the maximum number of PCM bytes to return; must be &gt; 0
+     * @return a copy of the trailing {@code maxBytes} (or fewer) bytes of audio;
+     *         never {@code null}
      */
-    public byte[] getSamplesRef() {
+    public byte[] readDecoderWindow(int maxBytes) {
         lock.readLock().lock();
         try {
-            return samples != null ? samples : new byte[0];
+            if (size == 0) {
+                return new byte[0];
+            }
+            int count  = Math.min(maxBytes, size);
+            int start  = size - count;
+            byte[] out = new byte[count];
+            System.arraycopy(buf, start, out, 0, count);
+            return out;
         } finally {
             lock.readLock().unlock();
         }
     }
 
     /**
-     * Returns the length of the internal sample array in bytes without copying.
+     * Returns a direct reference to the internal backing array without copying.
+     *
+     * <p><strong>Warning:</strong> the returned array must be treated as read-only,
+     * and only bytes in the range {@code [0, getLength())} contain valid audio data —
+     * the array may be larger than the amount of audio currently stored. The array
+     * reference itself may be replaced at any time by a concurrent
+     * {@link #load(byte[], float)} or {@link #clear()} call; {@link #appendChunk}
+     * may grow the array. Use this only on hot paths where copying would be too
+     * expensive, and always read {@link #getLength()} to find the valid byte count.
+     *
+     * @return the internal backing array; never {@code null}
+     */
+    public byte[] getSamplesRef() {
+        lock.readLock().lock();
+        try {
+            return buf;
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns the number of valid audio bytes currently stored.
      *
      * @return byte length of stored audio; {@code 0} when empty
      */
     public int getLength() {
         lock.readLock().lock();
         try {
-            return samples != null ? samples.length : 0;
+            return size;
         } finally {
             lock.readLock().unlock();
         }
@@ -198,7 +260,7 @@ public class AudioBuffer {
     public boolean isEmpty() {
         lock.readLock().lock();
         try {
-            return samples == null || samples.length == 0;
+            return size == 0;
         } finally {
             lock.readLock().unlock();
         }
@@ -215,10 +277,10 @@ public class AudioBuffer {
     public byte[] getSamples() {
         lock.readLock().lock();
         try {
-            if (samples == null) {
+            if (size == 0) {
                 return new byte[0];
             }
-            return Arrays.copyOf(samples, samples.length);
+            return Arrays.copyOf(buf, size);
         } finally {
             lock.readLock().unlock();
         }
@@ -251,10 +313,10 @@ public class AudioBuffer {
     public double getDurationSeconds() {
         lock.readLock().lock();
         try {
-            if (samples == null || samples.length == 0 || sampleRate == 0.0f) {
+            if (size == 0 || sampleRate == 0.0f) {
                 return 0.0;
             }
-            int numSamples = samples.length / 2; // 16-bit mono: 2 bytes per sample
+            int numSamples = size / 2; // 16-bit mono: 2 bytes per sample
             return numSamples / (double) sampleRate;
         } finally {
             lock.readLock().unlock();

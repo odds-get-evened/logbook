@@ -83,7 +83,9 @@ public class AudioConsumer implements Runnable {
         stopPlayback();
         DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
         outputLine = (SourceDataLine) AudioSystem.getLine(info);
-        outputLine.open(format);
+        // Explicit buffer size prevents the platform default from being too small
+        // (causing frequent blocking stalls) or too large (causing latency).
+        outputLine.open(format, 8192);
         outputLine.start();
         playbackActive = true;
         playbackPositionSamples = 0;
