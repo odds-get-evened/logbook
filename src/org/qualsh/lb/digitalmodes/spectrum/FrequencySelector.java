@@ -44,8 +44,9 @@ public class FrequencySelector extends JPanel {
     private double sampleRate        = 8000.0;
     private int    fftSize           = 1024;
 
-    private boolean draggingLeft  = false;
-    private boolean draggingRight = false;
+    private boolean draggingLeft   = false;
+    private boolean draggingRight  = false;
+    private boolean draggingCenter = false;
 
     private final List<FrequencySelectorListener> listeners = new ArrayList<>();
 
@@ -94,13 +95,15 @@ public class FrequencySelector extends JPanel {
             @Override
             public void mouseClicked(MouseEvent e) {
                 int x = e.getX();
-                int leftPx  = hzToPixel(centerFrequencyHz - bandwidthHz / 2.0);
-                int rightPx = hzToPixel(centerFrequencyHz + bandwidthHz / 2.0);
+                int centerPx = hzToPixel(centerFrequencyHz);
+                int leftPx   = hzToPixel(centerFrequencyHz - bandwidthHz / 2.0);
+                int rightPx  = hzToPixel(centerFrequencyHz + bandwidthHz / 2.0);
 
-                boolean nearLeft  = Math.abs(x - leftPx)  <= MARKER_CLICK_TOLERANCE_PX;
-                boolean nearRight = Math.abs(x - rightPx) <= MARKER_CLICK_TOLERANCE_PX;
+                boolean nearCenter = Math.abs(x - centerPx) <= MARKER_CLICK_TOLERANCE_PX;
+                boolean nearLeft   = Math.abs(x - leftPx)   <= MARKER_CLICK_TOLERANCE_PX;
+                boolean nearRight  = Math.abs(x - rightPx)  <= MARKER_CLICK_TOLERANCE_PX;
 
-                if (!nearLeft && !nearRight) {
+                if (!nearCenter && !nearLeft && !nearRight) {
                     double hz = pixelToHz(x);
                     setCenterFrequency(hz);
                 }
@@ -109,10 +112,13 @@ public class FrequencySelector extends JPanel {
             @Override
             public void mousePressed(MouseEvent e) {
                 int x = e.getX();
-                int leftPx  = hzToPixel(centerFrequencyHz - bandwidthHz / 2.0);
-                int rightPx = hzToPixel(centerFrequencyHz + bandwidthHz / 2.0);
+                int centerPx = hzToPixel(centerFrequencyHz);
+                int leftPx   = hzToPixel(centerFrequencyHz - bandwidthHz / 2.0);
+                int rightPx  = hzToPixel(centerFrequencyHz + bandwidthHz / 2.0);
 
-                if (Math.abs(x - leftPx) <= MARKER_CLICK_TOLERANCE_PX) {
+                if (Math.abs(x - centerPx) <= MARKER_CLICK_TOLERANCE_PX) {
+                    draggingCenter = true;
+                } else if (Math.abs(x - leftPx) <= MARKER_CLICK_TOLERANCE_PX) {
                     draggingLeft = true;
                 } else if (Math.abs(x - rightPx) <= MARKER_CLICK_TOLERANCE_PX) {
                     draggingRight = true;
@@ -121,23 +127,27 @@ public class FrequencySelector extends JPanel {
 
             @Override
             public void mouseReleased(MouseEvent e) {
-                draggingLeft  = false;
-                draggingRight = false;
+                draggingLeft   = false;
+                draggingRight  = false;
+                draggingCenter = false;
             }
 
             @Override
             public void mouseDragged(MouseEvent e) {
-                if (draggingLeft) {
+                if (draggingCenter) {
+                    double hz = pixelToHz(e.getX());
+                    setCenterFrequency(hz);
+                } else if (draggingLeft) {
                     double leftHz = pixelToHz(e.getX());
-                    double newBw  = centerFrequencyHz - leftHz;
-                    if (newBw < 50.0) newBw = 50.0;
+                    double newBw  = (centerFrequencyHz - leftHz) * 2.0;
+                    if (newBw < 100.0) newBw = 100.0;
                     bandwidthHz = newBw;
                     notifyBandwidthChanged();
                     repaint();
                 } else if (draggingRight) {
                     double rightHz = pixelToHz(e.getX());
-                    double newBw   = rightHz - centerFrequencyHz;
-                    if (newBw < 50.0) newBw = 50.0;
+                    double newBw   = (rightHz - centerFrequencyHz) * 2.0;
+                    if (newBw < 100.0) newBw = 100.0;
                     bandwidthHz = newBw;
                     notifyBandwidthChanged();
                     repaint();
@@ -230,7 +240,7 @@ public class FrequencySelector extends JPanel {
      * @param hz the desired bandwidth in hertz
      */
     public void setBandwidth(double hz) {
-        bandwidthHz = Math.max(50.0, hz);
+        bandwidthHz = Math.max(100.0, hz);
         repaint();
         notifyBandwidthChanged();
     }

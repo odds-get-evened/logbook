@@ -60,6 +60,9 @@ public class DspConsumerThread {
     private final double[] fftSignal     = new double[FFT_SIZE];
     private final byte[]   windowBytes   = new byte[FFT_WINDOW_SAMPLES * 2]; // 16-bit mono
 
+    /** Tracks the last observed playback position so the waterfall scrolls on position change. */
+    private int lastTickPosition = -1;
+
     /**
      * Creates a new DSP consumer thread.
      *
@@ -212,15 +215,17 @@ public class DspConsumerThread {
         }
 
         boolean isPlaying = playbackController != null && playbackController.isPlaying();
+        boolean positionAdvanced = (currentPosition != lastTickPosition);
+        lastTickPosition = currentPosition;
 
-        final double[] mag   = magnitudes;
-        final float    rate  = sampleRate;
-        final int      fftSz = nextPowerOfTwo(copied);
-        final boolean  play  = isPlaying;
+        final double[] mag      = magnitudes;
+        final float    rate     = sampleRate;
+        final int      fftSz   = nextPowerOfTwo(copied);
+        final boolean  scroll   = isPlaying || positionAdvanced;
 
         SwingUtilities.invokeLater(() -> {
             fftPanel.setMagnitudes(mag, rate, fftSz);
-            if (play) {
+            if (scroll) {
                 waterfallPanel.appendRow(mag);
             }
         });
