@@ -3,6 +3,7 @@ package org.qualsh.lb.digitalmodes;
 import org.qualsh.lb.digital.DigitalMode;
 import org.qualsh.lb.digital.decode.DecodeResult;
 import org.qualsh.lb.digitalmodes.audio.AudioBuffer;
+import org.qualsh.lb.digitalmodes.audio.AudioPipelineController;
 import org.qualsh.lb.digitalmodes.audio.PlaybackController;
 import org.qualsh.lb.digitalmodes.audio.RigAudioSource;
 import org.qualsh.lb.digitalmodes.audio.WavFileSource;
@@ -26,6 +27,8 @@ import org.qualsh.lb.digitalmodes.view.ModeSelectionPanel;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,11 +77,12 @@ public class DigitalModesWindow extends JDialog {
     // Audio infrastructure
     // -------------------------------------------------------------------------
 
-    private AudioBuffer        sharedBuffer;
-    private PlaybackController playbackController;
-    private WavFileSource      wavFileSource;
-    private RigAudioSource     rigAudioSource;
-    private DspConsumerThread  dspConsumerThread;
+    private AudioBuffer              sharedBuffer;
+    private PlaybackController       playbackController;
+    private AudioPipelineController  pipelineController;
+    private WavFileSource            wavFileSource;
+    private RigAudioSource           rigAudioSource;
+    private DspConsumerThread        dspConsumerThread;
 
     // -------------------------------------------------------------------------
     // Decode infrastructure
@@ -114,6 +118,13 @@ public class DigitalModesWindow extends JDialog {
 
         setDefaultCloseOperation(JDialog.HIDE_ON_CLOSE);
 
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                closeWindow();
+            }
+        });
+
         initComponents();
         initLayout();
         initListeners();
@@ -134,6 +145,8 @@ public class DigitalModesWindow extends JDialog {
         sharedBuffer       = new AudioBuffer();
         wavFileSource      = new WavFileSource();
         playbackController = new PlaybackController(sharedBuffer);
+        pipelineController = new AudioPipelineController(sharedBuffer);
+        pipelineController.setPlaybackController(playbackController);
 
         decodeLogModel = new DecodeLogModel();
         decodeLogTable = new DecodeLogTable(decodeLogModel);
@@ -280,7 +293,7 @@ public class DigitalModesWindow extends JDialog {
                 SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>() {
                     @Override
                     protected Void doInBackground() throws Exception {
-                        wavFileSource.loadFile(file);
+                        pipelineController.loadWavFile(file);
                         return null;
                     }
 
@@ -288,8 +301,6 @@ public class DigitalModesWindow extends JDialog {
                     protected void done() {
                         try {
                             get();
-                            AudioBuffer fb = wavFileSource.getBuffer();
-                            sharedBuffer.load(fb.getSamples(), fb.getSampleRate());
                             waterfallPanel.clearWaterfall();
                             decodeTextArea.appendText("--- File loaded: " + file.getName() + " ---\n");
                             audioControlPanel.getStatusLabel().setText(file.getName());
@@ -324,8 +335,11 @@ public class DigitalModesWindow extends JDialog {
                     protected void done() {
                         try {
                             get();
-                            AudioBuffer fb = wavFileSource.getBuffer();
-                            sharedBuffer.load(fb.getSamples(), fb.getSampleRate());
+                            // Load the recorded file through the streaming pipeline
+                            File recorded = wavFileSource.getWavFile();
+                            if (recorded != null) {
+                                pipelineController.loadWavFile(recorded);
+                            }
                             waterfallPanel.clearWaterfall();
                             decodeTextArea.appendText("--- Recording loaded ---\n");
                         } catch (Exception ex) {
@@ -338,21 +352,25 @@ public class DigitalModesWindow extends JDialog {
 
             @Override
             public void onPlayClicked() {
+                pipelineController.startPlayback();
                 playbackController.play();
             }
 
             @Override
             public void onPauseClicked() {
+                pipelineController.pausePlayback();
                 playbackController.pause();
             }
 
             @Override
             public void onStopClicked() {
+                pipelineController.stopPlayback();
                 playbackController.stop();
             }
 
             @Override
             public void onLoopToggled(boolean looping) {
+                pipelineController.setLooping(looping);
                 playbackController.setLooping(looping);
             }
         });
@@ -518,6 +536,7 @@ public class DigitalModesWindow extends JDialog {
     public void openWindow() {
         setVisible(true);
         requestFocus();
+        pipelineController.start();
         dspConsumerThread.start();
         decodeTextArea.appendText("--- Digital Modes Ready ---\n");
     }
@@ -533,6 +552,7 @@ public class DigitalModesWindow extends JDialog {
             decodeTimer.stop();
         }
         dspConsumerThread.stop();
+        pipelineController.shutdown();
         playbackController.stop();
         if (rigAudioSource != null && rigAudioSource.isActive()) {
             rigAudioSource.stop();
