@@ -25,6 +25,13 @@ public interface Decoder {
      * <p>Results appear in the decode output area and are added to the decode log.
      * An empty list is returned when no signals are found or the audio is too short.
      *
+     * <p><strong>Implementation note:</strong> implementations must call
+     * {@link AudioBuffer#readDecoderWindow(int)} (or {@link AudioBuffer#readWindow}) rather
+     * than {@link AudioBuffer#getSamples()} to avoid copying the entire accumulated buffer on
+     * every decode tick. Pass a {@code maxBytes} value that covers the decoder's maximum
+     * analysis window — for example {@code (int)(15.0f * buffer.getSampleRate()) * 2} for
+     * a 15-second FT8 analysis.
+     *
      * @param buffer the audio to analyze; must not be {@code null}
      * @return a list of decoded signals, possibly empty; never {@code null}
      */

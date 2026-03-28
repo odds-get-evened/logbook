@@ -72,14 +72,16 @@ public class Ft8Decoder {
                 return results;
             }
 
-            double[] signal = pcmToDouble(buffer.getSamples());
-
             if (buffer.getDurationSeconds() < MIN_FRAME_SECONDS) {
                 System.err.println(TAG + ": buffer duration "
                         + buffer.getDurationSeconds()
                         + "s is below the FT8 minimum of " + MIN_FRAME_SECONDS + "s; skipping");
                 return results;
             }
+
+            // Read only the last 15 seconds — avoids copying the entire accumulated buffer
+            int maxBytes = (int) (MIN_FRAME_SECONDS * buffer.getSampleRate()) * 2;
+            double[] signal = pcmToDouble(buffer.readDecoderWindow(maxBytes));
 
             dft = new DiscreteFourier(signal);
             dft.transform();

@@ -31,7 +31,11 @@ import java.util.concurrent.TimeUnit;
  * </ul>
  *
  * <p>All FFT working arrays are pre-allocated at construction and reused on
- * every tick to avoid garbage-collection pressure.
+ * every tick to avoid garbage-collection pressure. The {@link FastFourier} instance
+ * is cached and reused across ticks as long as the FFT size remains unchanged
+ * (which is the common case during continuous playback). A coalescing guard ensures
+ * that only one repaint {@link Runnable} is ever queued on the Event Dispatch Thread
+ * at a time, preventing the EDT from being flooded when it falls behind.
  *
  * <p>Call {@link #start()} to begin ticking and {@link #stop()} to shut down cleanly.
  * The underlying executor thread is a daemon so it will not prevent JVM exit.
@@ -41,9 +45,14 @@ import java.util.concurrent.TimeUnit;
  */
 public class DspConsumerThread {
 
-    private static final int REFRESH_RATE_MS  = 80;
+    /**
+     * Interval between DSP ticks in milliseconds.
+     * 120 ms gives approximately 8.3 spectrum updates per second — enough for
+     * smooth visual feedback without over-loading the Event Dispatch Thread.
+     */
+    private static final int REFRESH_RATE_MS    = 120;
     private static final int FFT_WINDOW_SAMPLES = 4096;
-    private static final int FFT_SIZE = nextPowerOfTwo(FFT_WINDOW_SAMPLES);
+    private static final int FFT_SIZE           = nextPowerOfTwo(FFT_WINDOW_SAMPLES);
 
     private final AudioBuffer        snapshotBuffer;
     private final PlaybackController playbackController;
@@ -56,9 +65,27 @@ public class DspConsumerThread {
     private ScheduledExecutorService scheduler;
 
     // Pre-allocated working arrays — reused every tick, zero allocations in hot path
-    private final float[]  fftWindow     = new float[FFT_WINDOW_SAMPLES];
-    private final double[] fftSignal     = new double[FFT_SIZE];
-    private final byte[]   windowBytes   = new byte[FFT_WINDOW_SAMPLES * 2]; // 16-bit mono
+    private final float[]  fftWindow   = new float[FFT_WINDOW_SAMPLES];
+    private final double[] fftSignal   = new double[FFT_SIZE];
+    private final byte[]   windowBytes = new byte[FFT_WINDOW_SAMPLES * 2]; // 16-bit mono
+
+    // Cached FastFourier instance — rebuilt only when the FFT size changes
+    private FastFourier cachedFft     = null;
+    private int         cachedFftSize = -1;
+
+    /**
+     * Pre-allocated magnitude output buffer reused every tick.
+     * Safe to reuse because the coalescing guard ({@link #pendingRepaint}) prevents
+     * the DSP thread from overwriting this array while the EDT is still reading it.
+     */
+    private double[] magnitudeBuffer = null;
+
+    /**
+     * Coalescing guard: {@code true} while a repaint {@link Runnable} is queued on the
+     * EDT but has not yet executed. When this flag is set the DSP thread skips posting
+     * another repaint, preventing the EDT event queue from being flooded.
+     */
+    private volatile boolean pendingRepaint = false;
 
     /** Tracks the last observed playback position so the waterfall scrolls on position change. */
     private int lastTickPosition = -1;
@@ -159,11 +186,18 @@ public class DspConsumerThread {
             return;
         }
 
-        final double[] mag    = magnitudes;
-        final float    rate   = sampleRate;
-        final int      fftSz  = nextPowerOfTwo(count);
+        // Coalescing: skip if the EDT hasn't consumed the previous repaint yet
+        if (pendingRepaint) {
+            return;
+        }
+        pendingRepaint = true;
+
+        final double[] mag   = magnitudes;
+        final float    rate  = sampleRate;
+        final int      fftSz = nextPowerOfTwo(count);
 
         SwingUtilities.invokeLater(() -> {
+            pendingRepaint = false;
             fftPanel.setMagnitudes(mag, rate, fftSz);
             waterfallPanel.appendRow(mag); // continuous scroll in rig mode
         });
@@ -204,8 +238,8 @@ public class DspConsumerThread {
 
         // Convert 16-bit signed little-endian PCM to normalised floats in pre-allocated array
         for (int i = 0; i < copied; i++) {
-            int lo     = windowBytes[i * 2]     & 0xFF;
-            int hi     = windowBytes[i * 2 + 1];
+            int lo        = windowBytes[i * 2]     & 0xFF;
+            int hi        = windowBytes[i * 2 + 1];
             fftWindow[i]  = ((hi << 8) | lo) / 32768.0f;
         }
 
@@ -214,16 +248,23 @@ public class DspConsumerThread {
             return;
         }
 
-        boolean isPlaying = playbackController != null && playbackController.isPlaying();
+        boolean isPlaying       = playbackController != null && playbackController.isPlaying();
         boolean positionAdvanced = (currentPosition != lastTickPosition);
         lastTickPosition = currentPosition;
 
-        final double[] mag      = magnitudes;
-        final float    rate     = sampleRate;
-        final int      fftSz   = nextPowerOfTwo(copied);
-        final boolean  scroll   = isPlaying || positionAdvanced;
+        // Coalescing: skip if the EDT hasn't consumed the previous repaint yet
+        if (pendingRepaint) {
+            return;
+        }
+        pendingRepaint = true;
+
+        final double[] mag    = magnitudes;
+        final float    rate   = sampleRate;
+        final int      fftSz  = nextPowerOfTwo(copied);
+        final boolean  scroll = isPlaying || positionAdvanced;
 
         SwingUtilities.invokeLater(() -> {
+            pendingRepaint = false;
             fftPanel.setMagnitudes(mag, rate, fftSz);
             if (scroll) {
                 waterfallPanel.appendRow(mag);
@@ -237,26 +278,44 @@ public class DspConsumerThread {
 
     /**
      * Computes the FFT magnitude spectrum for the given floating-point window.
-     * Reuses the pre-allocated {@link #fftSignal} array.
      *
-     * @param window samples in the window (normalized)
+     * <p>The {@link FastFourier} instance is cached and reused as long as the FFT
+     * size is unchanged (the common case during continuous playback). The pre-allocated
+     * {@link #magnitudeBuffer} is used as the output so the EDT can read from a stable
+     * array reference between ticks; the {@link #pendingRepaint} coalescing flag
+     * guarantees the DSP thread does not overwrite the buffer while the EDT is reading.
+     *
+     * @param window samples in the window (normalized floats)
      * @param count  number of valid samples in {@code window}
-     * @return magnitude array (half-spectrum), or {@code null} on error
+     * @return magnitude array (half-spectrum) backed by {@link #magnitudeBuffer},
+     *         or {@code null} on error
      */
     private double[] computeFft(float[] window, int count) {
         try {
             int fftSize = nextPowerOfTwo(count);
 
-            // Clear and fill the pre-allocated signal array
+            // Fill the pre-allocated signal array with this tick's samples
             for (int i = 0; i < fftSize; i++) {
                 fftSignal[i] = (i < count) ? window[i] : 0.0;
             }
 
-            // FastFourier requires a new instance per transform as it stores
-            // the signal internally, but we avoid allocating the input array
-            FastFourier fft = new FastFourier(fftSignal);
-            fft.transform();
-            return fft.getMagnitude(false);
+            // Rebuild the cached FastFourier only when the FFT size changes.
+            // FastFourier stores the signal array by reference, so updating fftSignal
+            // in-place and calling transform() again picks up the new data without
+            // a fresh allocation.
+            if (cachedFft == null || fftSize != cachedFftSize) {
+                cachedFft     = new FastFourier(fftSignal);
+                cachedFftSize = fftSize;
+                magnitudeBuffer = new double[fftSize / 2 + 1];
+            }
+
+            cachedFft.transform();
+            double[] raw = cachedFft.getMagnitude(false);
+            // Copy into the pre-allocated output buffer to avoid handing a fresh
+            // heap allocation to the EDT on every tick.
+            int copyLen = Math.min(raw.length, magnitudeBuffer.length);
+            System.arraycopy(raw, 0, magnitudeBuffer, 0, copyLen);
+            return magnitudeBuffer;
         } catch (Exception e) {
             return null;
         }

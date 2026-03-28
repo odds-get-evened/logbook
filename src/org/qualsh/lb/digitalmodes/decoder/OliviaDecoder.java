@@ -78,7 +78,9 @@ public class OliviaDecoder {
                 return results;
             }
 
-            double[] signal = pcmToDouble(buffer.getSamples());
+            // Read only the last 1 second of audio — avoids copying the entire accumulated buffer
+            int maxBytes = (int) buffer.getSampleRate() * 2;
+            double[] signal = pcmToDouble(buffer.readDecoderWindow(maxBytes));
 
             if (signal.length < MIN_SAMPLES_REQUIRED) {
                 System.err.println(TAG + ": signal length " + signal.length
