@@ -4,11 +4,6 @@ Logbook is a desktop app for shortwave radio listeners to keep track of every br
 
 ---
 
-![Uploading e02e8d1a164c.png…]()
-
-
----
-
 ## Getting Started
 
 ### First Launch
