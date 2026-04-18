@@ -288,32 +288,35 @@ public class Data {
 
 	private static void setMetaNameUnique() {
 		Connection conn = getConnection();
-		
-		Statement st;
+		Statement st = null;
 		try {
 			st = conn.createStatement();
 			st.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS unique_meta_name ON stations(meta_name)");
 			st.close();
 		} catch (SQLException e) {
 			e.printStackTrace();
+		} finally {
+			try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
 		}
 	}
 
 	private static void insertStations() {
 		Connection conn = getConnection();
 		ArrayList<Station> stns = getStations();
-		
-		for(Station stn : stns) {
-			try {
-				PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO stations (meta_name, title) VALUES (?, ?)");
-				ps.setString(1, stn.getMetaName());
-				ps.setString(2, stn.getTitle());
-				
-				ps.execute();
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
+		try {
+			for (Station stn : stns) {
+				try {
+					PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO stations (meta_name, title) VALUES (?, ?)");
+					ps.setString(1, stn.getMetaName());
+					ps.setString(2, stn.getTitle());
+					ps.execute();
+					ps.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
 			}
+		} finally {
+			try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
 		}
 	}
 
@@ -337,22 +340,21 @@ public class Data {
 
 	private static void insertLanguages() {
 		Connection conn = getConnection();
-		
 		ArrayList<Language> langs = getLanguages();
-		
-		for(Language lang : langs) {
-			try {
-				PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO languages (iso, label) VALUES (?, ?)");
-				ps.setString(1, lang.getIso());
-				ps.setString(2, lang.getLabel());
-				
-				ps.execute();
-				ps.close();
-			} catch (SQLException e) {
-				e.printStackTrace();
-			} finally {
-				
+		try {
+			for (Language lang : langs) {
+				try {
+					PreparedStatement ps = conn.prepareStatement("INSERT OR IGNORE INTO languages (iso, label) VALUES (?, ?)");
+					ps.setString(1, lang.getIso());
+					ps.setString(2, lang.getLabel());
+					ps.execute();
+					ps.close();
+				} catch (SQLException e) {
+					e.printStackTrace();
+				}
 			}
+		} finally {
+			try { conn.close(); } catch (SQLException e) { e.printStackTrace(); }
 		}
 	}
 

@@ -66,16 +66,16 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				logList.add(log);
 			}
 		} catch (SQLException e) {
-			return null;
+			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 
 			try {
-				st.close();
+				if (st != null) st.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
@@ -118,13 +118,13 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 
 			try {
-				ps.close();
+				if (ps != null) ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
@@ -162,27 +162,27 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 				logList.add(log);
 			}
 		} catch (SQLException e) {
-			return null;
+			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
-				st.close();
+				if (st != null) st.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 		}
-		
+
 		return logList;
 	}
 	
@@ -215,25 +215,24 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
-				ps.close();
+				if (ps != null) ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 		}
-		
-		
+
 		return logList;
 	}
 
@@ -407,7 +406,7 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			e.printStackTrace();
 		} finally {
 			try {
-				st.close();
+				if (st != null) st.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
@@ -432,10 +431,9 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			fireTableDataChanged();
 		} catch (SQLException e) {
 			e.printStackTrace();
-		}
-		finally {
+		} finally {
 			try {
-				ps.close();
+				if (ps != null) ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
@@ -534,13 +532,13 @@ public class LogsModel extends AbstractTableModel implements TableModelListener 
 			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
 
 			try {
-				ps.close();
+				if (ps != null) ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
