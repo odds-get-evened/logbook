@@ -54,17 +54,17 @@ public class ViewLocationsModel extends AbstractListModel<Location> {
 			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
-				st.close();
+				if (st != null) st.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
@@ -72,7 +72,7 @@ public class ViewLocationsModel extends AbstractListModel<Location> {
 			}
 		}
 	}
-	
+
 	public void setLocationsByStation(int id) {
 		this.data.clear();
 		
@@ -105,17 +105,17 @@ public class ViewLocationsModel extends AbstractListModel<Location> {
 			e.printStackTrace();
 		} finally {
 			try {
-				rs.close();
+				if (rs != null) rs.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
-				ps.close();
+				if (ps != null) ps.close();
 			} catch (SQLException e) {
 				e.printStackTrace();
 			}
-			
+
 			try {
 				conn.close();
 			} catch (SQLException e) {
